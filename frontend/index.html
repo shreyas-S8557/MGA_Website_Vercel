@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MGA Leads Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --border:#ddd; --bg:#f7f7f8; --accent:#2563eb; --danger:#dc2626; --ok:#16a34a; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: var(--bg); color: #111; }
+  header { background:#111; color:#fff; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:16px; margin:0; }
+  header input { padding:4px 8px; font-size:12px; width:220px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  section { background:#fff; border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:#555; margin-top:0; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  .stat { flex:1; min-width:110px; text-align:center; padding:10px; border:1px solid var(--border); border-radius:6px; }
+  .stat .n { font-size:22px; font-weight:700; }
+  .stat .l { font-size:11px; color:#666; text-transform:uppercase; }
+  table { width:100%; border-collapse: collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+  th { color:#666; font-weight:600; font-size:11px; text-transform:uppercase; }
+  tr.clickable { cursor:pointer; }
+  tr.clickable:hover { background:#f0f4ff; }
+  button { cursor:pointer; border:1px solid var(--border); background:#fff; padding:6px 12px; border-radius:6px; font-size:13px; }
+  button:hover { background:#f0f0f0; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.danger { background:var(--danger); color:#fff; border-color:var(--danger); }
+  button.ok { background:var(--ok); color:#fff; border-color:var(--ok); }
+  button:disabled { opacity:.5; cursor:default; }
+  input, textarea, select { padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:100%; }
+  label { font-size:12px; color:#444; display:block; margin-bottom:2px; }
+  .field { margin-bottom:10px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; background:#eee; }
+  .badge.configured, .badge.ENABLED { background:#dcfce7; color:#166534; }
+  .badge.not_configured, .badge.DISABLED { background:#fee2e2; color:#991b1b; }
+  /* Lead statuses (see app/db/database.py's mga_leads table):
+     green = done/good, red = failed, blue = early intake stages,
+     grey = mid-pipeline/in progress. */
+  .badge.delivered { background:#dcfce7; color:#166534; }
+  .badge.failed { background:#fee2e2; color:#991b1b; }
+  .badge.received, .badge.normalized { background:#e0e7ff; color:#3730a3; }
+  .badge.profiled, .badge.lead_magnet_generating, .badge.lead_magnet_ready, .badge.delivery_queued { background:#eee; color:#555; }
+  .muted { color:#888; font-size:12px; }
+  span.ok { color:var(--ok); font-size:12px; font-weight:600; }
+  span.warn { color:#b45309; font-size:12px; font-weight:600; }
+  .hidden { display:none; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  a.back { font-size:12px; cursor:pointer; color:var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MGA Leads Dashboard</h1>
+  <div>
+    <label style="color:#ccc;font-size:11px;">API base
+      <input id="apiBase" value="http://localhost:8000" />
+    </label>
+    <label style="color:#ccc;font-size:11px;margin-left:8px;">Dashboard key
+      <input id="dashboardKey" type="password" placeholder="DASHBOARD_API_KEY" autocomplete="off" />
+    </label>
+  </div>
+</header>
+
+<main>
+
+  <div id="view-dashboard">
+    <!-- Lead-magnet submissions (website quiz / Google Form -> profiling ->
+         personalized PDF -> download + email). -->
+    <section>
+      <div class="toolbar">
+        <h2 style="flex:1;margin:0;">MGA Leads</h2>
+        <span class="muted">mygrowthacademy.coach &rarr; lead magnet</span>
+      </div>
+      <div class="row" id="mgaLeadStats"></div>
+
+      <div class="toolbar" style="margin-top:14px;">
+        <label style="margin:0;">Filter
+          <select id="mgaLeadStatusFilter" onchange="loadMgaLeads()" style="width:auto;display:inline-block;margin-left:4px;">
+            <option value="">All statuses</option>
+            <option value="received">Received</option>
+            <option value="normalized">Normalized</option>
+            <option value="profiled">Profiled</option>
+            <option value="lead_magnet_generating">Generating lead magnet</option>
+            <option value="lead_magnet_ready">Lead magnet ready</option>
+            <option value="delivery_queued">Delivery queued</option>
+            <option value="delivered">Delivered</option>
+            <option value="failed">Failed</option>
+          </select>
+        </label>
+      </div>
+
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Lead magnet</th><th>Submitted</th></tr></thead>
+        <tbody id="mgaLeadList"></tbody>
+      </table>
+      <div id="mgaLeadDetail" class="hidden" style="margin-top:12px;"></div>
+    </section>
+
+    <section>
+      <h2>Settings</h2>
+      <div id="providerStatus" class="row"></div>
+      <div class="field" style="margin-top:12px;">
+        <label>Email provider (lead-magnet + team notification emails)</label>
+        <div class="row" style="align-items:center; gap:8px;">
+          <button onclick="testProviderConnection()">Test MailerLite connection</button>
+          <span id="providerTestResult" class="muted"></span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Send one MailerLite test email <span class="muted">(goes only to the address you type here)</span></label>
+        <div class="row" style="align-items:center; gap:8px;">
+          <input id="providerTestSendTo" placeholder="you@example.com" style="max-width:280px;" />
+          <button onclick="sendProviderTestEmail()">Send test email</button>
+        </div>
+        <div id="providerTestSendResult" class="muted" style="margin-top:6px;"></div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const apiBase = () => $('apiBase').value.replace(/\/$/, '');
+
+// Dashboard key (the backend's DASHBOARD_API_KEY). Every dashboard request
+// sends it as X-Dashboard-Key; without it the backend returns 401. It is
+// remembered in this browser only, so you type it once per machine.
+const DASHBOARD_KEY_STORE = 'mgaDashboardKey';
+try { $('dashboardKey').value = localStorage.getItem(DASHBOARD_KEY_STORE) || ''; } catch (e) {}
+$('dashboardKey').addEventListener('change', () => {
+  try { localStorage.setItem(DASHBOARD_KEY_STORE, $('dashboardKey').value.trim()); } catch (e) {}
+});
+const authHeaders = () => ({ 'X-Dashboard-Key': $('dashboardKey').value.trim() });
+
+async function api(path, opts) {
+  const res = await fetch(apiBase() + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...((opts && opts.headers) || {}) },
+  });
+  if (res.status === 401 || res.status === 503) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    $('dashboardKey').focus();
+    throw new Error(`${detail} — enter the dashboard key at the top right.`);
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+function badge(status) { return `<span class="badge ${status}">${status}</span>`; }
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+// ---------- Dashboard ----------
+
+async function loadDashboard() {
+  loadMgaLeads();
+
+  try {
+    const s = await api('/api/settings');
+    $('providerStatus').innerHTML = Object.entries(s.providers).map(([name, info]) =>
+      `<div class="stat"><div class="l">${name.replaceAll('_', ' ')}</div><div style="margin-top:4px;">${badge(info.status)}</div></div>`
+    ).join('') + `<div class="stat"><div class="l">Live sending</div><div style="margin-top:4px;">${badge(s.live_sending_allowed ? 'ENABLED' : 'DISABLED')}</div></div>`;
+  } catch (e) {
+    $('providerStatus').innerHTML = `<span class="muted">${e.message}</span>`;
+  }
+}
+
+// ---------- MGA leads (website quiz / Google Form -> lead magnet) ----------
+
+function mgaStatusLabel(status) {
+  return (status || '').split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+}
+
+async function loadMgaLeads() {
+  try {
+    const summary = await api('/api/dashboard/mga-leads/summary');
+    $('mgaLeadStats').innerHTML = [
+      ['total_submissions', 'Submissions'], ['new_leads', 'New'],
+      ['profiled_leads', 'Profiled'], ['lead_magnets_generated', 'Magnets generated'],
+      ['lead_magnets_delivered', 'Delivered'], ['failed', 'Failed'],
+    ].map(([k, l]) => `<div class="stat"><div class="n">${summary[k] ?? 0}</div><div class="l">${l}</div></div>`).join('');
+  } catch (e) {
+    $('mgaLeadStats').innerHTML = `<span class="muted">Cannot reach backend: ${e.message}</span>`;
+  }
+
+  try {
+    const status = $('mgaLeadStatusFilter').value;
+    const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+    const list = await api(`/api/dashboard/mga-leads${qs}`);
+    $('mgaLeadList').innerHTML = list.items.map(l => `
+      <tr class="clickable" onclick="toggleMgaLeadDetail('${l.id}')">
+        <td>${escapeHtml(l.name) || '<span class="muted">—</span>'}</td>
+        <td>${escapeHtml(l.email) || '<span class="muted">—</span>'}</td>
+        <td>${badge(l.status)}</td>
+        <td>${l.lead_magnet_type ? escapeHtml(l.lead_magnet_type.replaceAll('_', ' ')) : '<span class="muted">—</span>'}</td>
+        <td class="muted">${(l.submitted_at || l.created_at || '').slice(0, 10)}</td>
+      </tr>`).join('') || '<tr><td colspan="5" class="muted">No submissions yet.</td></tr>';
+  } catch (e) {
+    $('mgaLeadList').innerHTML = `<tr><td colspan="5" class="muted">${e.message}</td></tr>`;
+  }
+}
+
+let openMgaLeadId = null;
+
+async function toggleMgaLeadDetail(leadId) {
+  const box = $('mgaLeadDetail');
+  if (openMgaLeadId === leadId) {
+    box.classList.add('hidden');
+    openMgaLeadId = null;
+    return;
+  }
+  openMgaLeadId = leadId;
+  box.classList.remove('hidden');
+  box.innerHTML = '<span class="muted">Loading…</span>';
+
+  try {
+    const lead = await api(`/api/dashboard/mga-leads/${leadId}`);
+    const answersRows = Object.entries(lead.raw_answers || {})
+      .filter(([q]) => q !== '__field_map__')
+      .map(([q, a]) => `<tr><td class="muted" style="width:40%;">${escapeHtml(q)}</td><td>${escapeHtml(a)}</td></tr>`)
+      .join('') || '<tr><td class="muted">No answers recorded.</td></tr>';
+
+    const profileRows = lead.profile
+      ? Object.entries(lead.profile).map(([k, v]) =>
+          `<tr><td class="muted" style="width:40%;">${escapeHtml(k.replaceAll('_', ' '))}</td><td>${escapeHtml(v ?? '—')}</td></tr>`
+        ).join('')
+      : '<tr><td class="muted">Not profiled yet.</td></tr>';
+
+    const magnetLine = lead.lead_magnet_delivery_url
+      ? `<a class="back" href="${apiBase()}${lead.lead_magnet_delivery_url}" target="_blank">Download generated lead magnet (PDF)</a>`
+      : '<span class="muted">Not generated yet.</span>';
+
+    const errorBlock = lead.error_message
+      ? `<div class="field" style="margin-top:10px;">
+           <span class="warn">Failed at "${mgaStatusLabel(lead.failed_stage)}": ${escapeHtml(lead.error_message)}</span><br/>
+           <button class="primary" style="margin-top:6px;" onclick="retryMgaLead('${lead.id}')">Retry from failed stage</button>
+           <span id="mgaRetryResult-${lead.id}" class="muted" style="margin-left:8px;"></span>
+         </div>`
+      : '';
+
+    box.innerHTML = `
+      <div class="grid2">
+        <div>
+          <h2 style="margin-top:0;">Original form answers</h2>
+          <table>${answersRows}</table>
+        </div>
+        <div>
+          <h2 style="margin-top:0;">Normalized profile</h2>
+          <table>${profileRows}</table>
+          <div class="field" style="margin-top:10px;"><label>Lead magnet</label>${magnetLine}</div>
+          <div class="field"><label>Availability</label>${lead.delivered_at ? `<span class="ok">Available for download since ${escapeHtml(lead.delivered_at.slice(0, 19))}</span>` : '<span class="muted">Not available yet.</span>'}</div>
+          <div class="field"><label>Team notified</label>${lead.team_notified_at ? `<span class="ok">Emailed ${escapeHtml(lead.team_notified_at.slice(0, 19))}</span>` : (lead.team_notify_error ? `<span class="warn">Not sent: ${escapeHtml(lead.team_notify_error)}</span>` : '<span class="muted">No LEAD_NOTIFY_EMAILS configured.</span>')}</div>
+        </div>
+      </div>
+      ${errorBlock}
+      <a class="back" onclick="toggleMgaLeadDetail('${leadId}')" style="display:inline-block;margin-top:10px;">Close</a>
+    `;
+  } catch (e) {
+    box.innerHTML = `<span class="muted">${e.message}</span>`;
+  }
+}
+
+async function retryMgaLead(leadId) {
+  const out = $(`mgaRetryResult-${leadId}`);
+  if (out) out.textContent = 'Retrying…';
+  try {
+    // Requires the same shared secret the Google Apps Script uses (see
+    // google-apps-script/README.md) -- prompted here rather than stored.
+    const secret = window.prompt('Webhook secret (GOOGLE_FORM_WEBHOOK_SECRET) to authorize this retry:');
+    if (!secret) { if (out) out.textContent = ''; return; }
+    const res = await fetch(`${apiBase()}/api/leads/${leadId}/retry`, {
+      method: 'POST',
+      headers: { 'X-MGA-Webhook-Secret': secret, ...authHeaders() },
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const body = await res.json();
+    if (out) out.textContent = `Now: ${mgaStatusLabel(body.status)}`;
+    loadMgaLeads();
+    toggleMgaLeadDetail(leadId); // close
+    toggleMgaLeadDetail(leadId); // reopen with fresh data
+  } catch (e) {
+    if (out) out.textContent = `Error: ${e.message}`;
+  }
+}
+
+// ---------- Email provider (MailerLite) test controls ----------
+
+async function testProviderConnection() {
+  const out = $('providerTestResult');
+  out.textContent = 'Testing...';
+  try {
+    const r = await api('/api/email/provider/test', { method: 'POST' });
+    if (r.authenticated) {
+      out.textContent = `OK -- authenticated. Sender: ${r.sender || '(not set)'}`;
+    } else {
+      out.textContent = `Not authenticated: ${r.error || 'unknown error'}`;
+    }
+  } catch (e) { out.textContent = `Error: ${e.message}`; }
+}
+
+async function sendProviderTestEmail() {
+  const to = $('providerTestSendTo').value.trim();
+  const out = $('providerTestSendResult');
+  if (!to) { out.textContent = 'Enter a test address first.'; return; }
+  out.textContent = 'Sending...';
+  try {
+    const r = await api('/api/email/provider/test-send', { method: 'POST', body: JSON.stringify({ to }) });
+    out.textContent = r.success
+      ? `Sent (message_id=${r.message_id})`
+      : `Failed: ${r.error}`;
+  } catch (e) { out.textContent = `Error: ${e.message}`; }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

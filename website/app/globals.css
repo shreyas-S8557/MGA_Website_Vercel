@@ -1,0 +1,187 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Colors below were sampled directly (Python + PIL, pixel RGB reads at
+ * multiple coordinates) from the 9 real mygrowthacademy.coach screenshots
+ * and cross-checked against hex/rgb literals in the raw HTML scrape of the
+ * live Wix site. Kept as CSS custom properties per explicit request, and
+ * mirrored into tailwind.config.js's `mga` palette so both usages stay in
+ * sync.
+ */
+:root {
+  --mga-bg: #969cbd; /* hero + mentors/video section background */
+  --mga-band: #cbc9da; /* thin lavender heading banners */
+  --mga-bg-light: #fff6ef; /* cream: Real Results bg + modal card bg */
+  --mga-navy: #36488f; /* dark navy mentor-story section background */
+  --mga-heading: #36488f; /* indigo heading text */
+  --mga-coral: #c84739; /* coral CTA button / coral heading text */
+  --mga-accent-blue: #2a3690; /* italic secondary copy */
+  --mga-mint: #63d0a2; /* mint button inside the modal only */
+  --mga-mint-dark: #4fb98d;
+  --mga-gray: #8f8f8f;
+  --mga-gray-dark: #424242;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  color: var(--mga-gray-dark);
+  background-color: var(--mga-bg-light);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  color: var(--mga-heading);
+}
+
+/* ------------------------------------------------------------------ */
+/* Animations                                                          */
+/* Calm, "growth"-themed motion: things rise gently into place as you  */
+/* scroll, illustrations drift slightly, the CTA breathes. Everything  */
+/* is disabled for visitors who prefer reduced motion.                 */
+/* ------------------------------------------------------------------ */
+
+@keyframes mga-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mga-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes mga-pop {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes mga-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 71, 57, 0.45); }
+  50%      { box-shadow: 0 0 0 12px rgba(200, 71, 57, 0); }
+}
+@keyframes mga-shine {
+  0%   { transform: translateX(-120%) skewX(-20deg); }
+  60%, 100% { transform: translateX(260%) skewX(-20deg); }
+}
+@keyframes mga-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes mga-grow-line {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Hero entrance (runs on load, staggered) */
+.mga-hero-in {
+  opacity: 0;
+  animation: mga-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.mga-delay-1 { animation-delay: 0.15s; }
+.mga-delay-2 { animation-delay: 0.35s; }
+.mga-delay-3 { animation-delay: 0.55s; }
+
+/* Header slides down on load */
+.mga-header-in { animation: mga-fade 0.8s ease-out both; }
+
+/* Scroll reveal — only hides content once JS has confirmed it can reveal it */
+[data-reveal] {
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal-ready [data-reveal]:not(.is-visible) { opacity: 0; }
+.reveal-ready [data-reveal="up"]:not(.is-visible)    { transform: translateY(32px); }
+.reveal-ready [data-reveal="left"]:not(.is-visible)  { transform: translateX(-40px); }
+.reveal-ready [data-reveal="right"]:not(.is-visible) { transform: translateX(40px); }
+.reveal-ready [data-reveal="zoom"]:not(.is-visible)  { transform: scale(0.94); }
+
+/* Divider under slide headings draws itself in */
+.mga-divider {
+  transform-origin: left;
+  animation: mga-grow-line 0.8s 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.mga-divider-right { transform-origin: right; }
+
+/* Illustrations: gentle lift on hover */
+.mga-illustration {
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s ease;
+}
+.mga-illustration:hover {
+  transform: translateY(-6px) rotate(-0.4deg);
+  box-shadow: 0 22px 40px -18px rgba(54, 72, 143, 0.45);
+}
+
+/* Carousel: active slide copy rises in each time it becomes current */
+.mga-slide-copy > * { opacity: 1; }
+.mga-slide-active .mga-slide-copy > * {
+  animation: mga-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.mga-slide-active .mga-slide-copy > *:nth-child(2) { animation-delay: 0.12s; }
+.mga-slide-active .mga-slide-copy > *:nth-child(3) { animation-delay: 0.22s; }
+.mga-slide-active .mga-slide-img {
+  animation: mga-pop 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Journey step numbers bob softly */
+.mga-step-dot { animation: mga-float 3.2s ease-in-out infinite; }
+
+/* CTA: soft breathing ring + periodic shine */
+.mga-cta {
+  position: relative;
+  overflow: hidden;
+  animation: mga-breathe 2.8s ease-in-out infinite;
+}
+.mga-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: mga-shine 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Modal */
+.mga-backdrop { animation: mga-fade 0.25s ease-out both; }
+.mga-modal { animation: mga-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Footer social icons */
+.mga-social {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.3s ease, color 0.3s ease;
+}
+.mga-social:hover,
+.mga-social:focus-visible {
+  transform: translateY(-4px) scale(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .mga-hero-in { opacity: 1; }
+  .reveal-ready [data-reveal]:not(.is-visible) { opacity: 1; transform: none; }
+}
+
+/* Hairline (0.05px, 30% opacity) outline that follows the logo's own shape, just enough
+   to separate the navy lettering from the navy header. Original brand
+   colours; the PNG is upscaled 3x and sharpened for crisp edges. */
+.mga-logo-outline {
+  filter:
+    contrast(1.1)
+    drop-shadow(0.05px 0 0 rgba(0, 0, 0, 0.3))
+    drop-shadow(-0.05px 0 0 rgba(0, 0, 0, 0.3))
+    drop-shadow(0 0.05px 0 rgba(0, 0, 0, 0.3))
+    drop-shadow(0 -0.05px 0 rgba(0, 0, 0, 0.3));
+}

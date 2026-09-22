@@ -1,0 +1,60 @@
+# --- Python (backend/) ---------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Node / Next.js (website/) ----------------------------------------------
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Secrets / environment --------------------------------------------------
+# Keep the .env.example templates; never commit the real values.
+.env
+.env.local
+.env.*.local
+!.env.example
+!website/.env.example
+
+# --- Databases / generated runtime data -------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+pipeline_state.db*
+data/mga_lead_magnets/
+*.pdf
+
+# --- Logs --------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- OS / editor ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Misc ----------------------------------------------------------------------
+*.zip
+*.tar.gz
