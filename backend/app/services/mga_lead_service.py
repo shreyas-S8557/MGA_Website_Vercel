@@ -482,7 +482,7 @@ def notify_team(row: dict[str, Any]) -> dict[str, Any]:
     from app.services.sending_service import SendModeNotAllowed, get_sender
 
     try:
-        sender = get_sender("live")
+        sender = get_sender("live", provider=config.TEAM_EMAIL_PROVIDER)
     except SendModeNotAllowed as exc:
         updates = {"team_notify_error": str(exc)[:2000]}
         database.update_mga_lead(row["id"], updates)

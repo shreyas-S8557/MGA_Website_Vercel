@@ -26,7 +26,7 @@ def provider_status() -> dict[str, dict[str, str]]:
             "status": _status(
                 "MAILERLITE_API_TOKEN", "MAILERLITE_SENDER_EMAIL", "MAILERLITE_SENDER_NAME"
             ),
-            "detail": "Sends lead-magnet and team-notification emails (default EMAIL_PROVIDER)",
+            "detail": "Sends lead-magnet emails (EMAIL_PROVIDER=mailerlite, or mailerlite_classic for Classic accounts)",
         },
         "gmail": {
             "status": _status("GMAIL_ADDRESS", "GMAIL_APP_PASSWORD"),

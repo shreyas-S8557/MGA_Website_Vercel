@@ -50,6 +50,11 @@ import httpx
 
 BASE_URL = "https://connect.mailerlite.com/api"
 RATE_LIMIT_PER_MINUTE = 120  # MailerLite's documented global rate limit
+OUTBOX_PREFIX = "mga-outbox-"
+# MailerLite allows at most 1,000 groups per account, so the one-off outbox
+# groups are deleted once they're this old (long after an instant campaign
+# has gone out). See _cleanup_old_outbox_groups.
+OUTBOX_MAX_AGE_HOURS = 24
 DEFAULT_TIMEOUT_SECONDS = 20.0
 
 
@@ -90,10 +95,19 @@ def _env(name: str) -> str:
 
 
 def _body_to_html(body: str) -> str:
-    """job.body is plain text (see email_generation.py). MailerLite requires
-    `emails.*.content` to be valid HTML, so this does the minimal, safe
-    conversion: escape it, then turn newlines into <br> -- no markdown/rich
-    formatting is invented that wasn't in the original generated text."""
+    """MailerLite requires `emails.*.content` to be a full, valid HTML
+    document. The report email and the team alert are already HTML (built
+    in mga_lead_service with every visitor-supplied value escaped there),
+    so those are wrapped as-is -- escaping them again would show the raw
+    tags to the recipient. Plain text (e.g. the test email) is escaped and
+    its newlines turned into <br>."""
+    import re
+
+    stripped = body.strip()
+    if re.search(r"<(html|body|div|p|table|h[1-6]|a|ul|br)\b", stripped, re.I):
+        if stripped.lower().startswith("<html"):
+            return stripped
+        return "<html><body>" + stripped + "</body></html>"
     escaped = html.escape(body)
     return "<html><body><p>" + escaped.replace("\n", "<br>\n") + "</p></body></html>"
 
@@ -256,9 +270,11 @@ class MailerLiteSender:
         except MailerLiteCredentialsError as exc:
             return SendResult(success=False, error=str(exc), retryable=False)
 
+        self._cleanup_old_outbox_groups()
+
         group_id: str | None = None
         try:
-            group_name = f"mga-outbox-{uuid.uuid4().hex}"
+            group_name = f"{OUTBOX_PREFIX}{uuid.uuid4().hex}"
             group = self._request("POST", "/groups", json={"name": group_name})
             group_id = (group or {}).get("data", {}).get("id")
             if not group_id:
@@ -295,7 +311,7 @@ class MailerLiteSender:
                 )
 
             self._request(
-                "POST", f"/campaigns/{campaign_id}/actions/schedule", json={"delivery": "instant"}
+                "POST", f"/campaigns/{campaign_id}/schedule", json={"delivery": "instant"}
             )
 
             if self.cleanup_group:
@@ -346,6 +362,37 @@ class MailerLiteSender:
         except httpx.RequestError as exc:
             return SendResult(success=False, error=f"Network error contacting MailerLite: {exc}", retryable=True)
 
+    def _cleanup_old_outbox_groups(self) -> int:
+        """Best-effort housekeeping: delete one-off outbox groups older than
+        OUTBOX_MAX_AGE_HOURS, so the account never reaches MailerLite's
+        1,000-group limit. Only touches groups whose name starts with
+        OUTBOX_PREFIX (never real marketing groups). Never raises."""
+        from datetime import datetime, timedelta, timezone
+
+        deleted = 0
+        try:
+            data = self._request(
+                "GET",
+                f"/groups?filter[name]={OUTBOX_PREFIX}&limit=50&sort=created_at",
+                json=None,
+            ) or {}
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=OUTBOX_MAX_AGE_HOURS)
+            for group in data.get("data", []):
+                name = str(group.get("name", ""))
+                if not name.startswith(OUTBOX_PREFIX):
+                    continue
+                created = _parse_time(group.get("created_at"))
+                if created is None or created > cutoff:
+                    continue
+                try:
+                    self._request("DELETE", f"/groups/{group['id']}", json=None)
+                    deleted += 1
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001 -- housekeeping must never block a send
+            pass
+        return deleted
+
     def send_test_email(self, to_address: str | None = None) -> SendResult:
         """A real test send to verify MailerLite authentication + sender
         config before going live, mirroring
@@ -366,12 +413,29 @@ class MailerLiteSender:
         )
 
 
+def _parse_time(value: Any):
+    """MailerLite timestamps look like '2026-09-23 10:15:00' (UTC) or ISO
+    8601. Returns an aware datetime, or None if unparsable."""
+    from datetime import datetime, timezone
+
+    if not value:
+        return None
+    text = str(value).strip().replace("T", " ").replace("Z", "")
+    text = text.split(".")[0].split("+")[0]
+    try:
+        return datetime.strptime(text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
 def _error_detail(exc: httpx.HTTPStatusError) -> str:
     try:
         data = exc.response.json()
     except Exception:  # noqa: BLE001
         return exc.response.text[:300]
     if isinstance(data, dict):
+        if isinstance(data.get("error"), dict):  # MailerLite Classic: {"error": {"code", "message"}}
+            return str(data["error"].get("message") or data["error"])[:300]
         message = data.get("message", "")
         errors = data.get("errors")
         if errors:

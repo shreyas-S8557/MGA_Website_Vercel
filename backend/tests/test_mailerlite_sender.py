@@ -61,7 +61,7 @@ class _FakeHTTPXClient:
         key = (method, path.split("?")[0])
         entry = self._responses.get(key)
         if entry is None:
-            # Path with an id in it, e.g. /campaigns/123/actions/schedule --
+            # Path with an id in it, e.g. /campaigns/123/schedule --
             # allow a wildcard registered as (METHOD, "*")
             entry = self._responses.get((method, "*"))
         if isinstance(entry, list):
@@ -86,7 +86,7 @@ def happy_path_responses():
         ("POST", "/groups"): _FakeResponse(200, {"data": {"id": "g1"}}),
         ("POST", "/subscribers"): _FakeResponse(200, {"data": {"id": "s1", "email": "x@example.com"}}),
         ("POST", "/campaigns"): _FakeResponse(200, {"data": {"id": "c1"}}),
-        ("POST", "/campaigns/c1/actions/schedule"): _FakeResponse(200, {"data": {"id": "c1", "status": "sending"}}),
+        ("POST", "/campaigns/c1/schedule"): _FakeResponse(200, {"data": {"id": "c1", "status": "sending"}}),
     }
 
 
@@ -122,6 +122,9 @@ class MailerLiteSendTests(unittest.TestCase):
         self.assertEqual(result.message_id, "c1")
         self.assertEqual(result.error, "")
 
+        # the read-only outbox housekeeping lookup comes first; ignore it here
+        self.assertEqual(calls[0][:2][0], "GET")
+        calls[:] = [c for c in calls if c[0] != "GET"]
         methods_paths = [(m, p) for m, p, _ in calls]
         self.assertEqual(
             methods_paths,
@@ -129,7 +132,7 @@ class MailerLiteSendTests(unittest.TestCase):
                 ("POST", "/groups"),
                 ("POST", "/subscribers"),
                 ("POST", "/campaigns"),
-                ("POST", "/campaigns/c1/actions/schedule"),
+                ("POST", "/campaigns/c1/schedule"),
             ],
         )
 
@@ -296,3 +299,38 @@ class MailerLiteCheckConfigurationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MailerLiteHousekeepingAndHtmlTests(unittest.TestCase):
+    def test_old_outbox_groups_are_deleted_but_new_and_real_groups_kept(self):
+        from datetime import datetime, timedelta, timezone
+
+        old = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+        new = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        responses = happy_path_responses()
+        responses[("GET", "/groups")] = _FakeResponse(200, {"data": [
+            {"id": "old1", "name": "mga-outbox-aaa", "created_at": old},
+            {"id": "new1", "name": "mga-outbox-bbb", "created_at": new},
+            {"id": "real", "name": "Newsletter", "created_at": old},
+        ]})
+        responses[("DELETE", "*")] = _FakeResponse(204, None)
+        calls: list = []
+        sender = make_sender(responses, calls)
+        self.assertTrue(sender.send("lead@example.com", "Hi", "Body").success)
+        deleted = [p for m, p, _ in calls if m == "DELETE"]
+        self.assertEqual(deleted, ["/groups/old1"])
+
+    def test_housekeeping_failure_never_blocks_the_send(self):
+        responses = happy_path_responses()
+        responses[("GET", "/groups")] = _FakeResponse(500, {"message": "boom"})
+        calls: list = []
+        self.assertTrue(make_sender(responses, calls).send("lead@example.com", "Hi", "Body").success)
+
+    def test_html_bodies_are_sent_as_html_not_escaped(self):
+        calls: list = []
+        sender = make_sender(happy_path_responses(), calls)
+        sender.send("lead@example.com", "Hi", '<div><p style="color:red">Hello</p></div>')
+        campaign = [j for m, p, j in calls if p == "/campaigns"][0]
+        content = campaign["emails"][0]["content"]
+        self.assertIn('<p style="color:red">Hello</p>', content)
+        self.assertNotIn("&lt;div", content)

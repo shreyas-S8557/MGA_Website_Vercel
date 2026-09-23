@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.senders.mailerlite_classic_sender import MailerLiteClassicSender
 from app.senders.mailerlite_sender import MailerLiteSender
+
+
+def _mailerlite_sender():
+    """New MailerLite, or the Classic (Legacy) API when
+    EMAIL_PROVIDER=mailerlite_classic."""
+    import app.config as config
+
+    if config.EMAIL_PROVIDER == "mailerlite_classic":
+        return MailerLiteClassicSender()
+    return MailerLiteSender()
 
 
 class TestSendNotAllowed(PermissionError):
@@ -17,7 +28,7 @@ def test_connection() -> dict[str, Any]:
     """Read-only MailerLite configuration/connectivity check. Never touches
     subscribers/groups/campaigns and never returns the API token -- see
     MailerLiteSender.check_configuration()."""
-    sender = MailerLiteSender()
+    sender = _mailerlite_sender()
     result = sender.check_configuration()
     return result
 
@@ -27,10 +38,10 @@ def send_test_email(to_address: str) -> dict[str, Any]:
     `to_address` only. Never selects a lead from the database."""
     if not to_address or not to_address.strip():
         raise TestSendNotAllowed("A 'to' address is required for a test send.")
-    sender = MailerLiteSender()
+    sender = _mailerlite_sender()
     result = sender.send_test_email(to_address.strip())
     return {
-        "provider": "mailerlite",
+        "provider": getattr(sender, "provider", "mailerlite"),
         "to": to_address.strip(),
         "success": result.success,
         "message_id": result.message_id,

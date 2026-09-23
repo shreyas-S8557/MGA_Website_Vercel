@@ -32,7 +32,7 @@ def _enable(monkeypatch, recipients, sender):
     from app.services import sending_service
 
     monkeypatch.setattr(config, "LEAD_NOTIFY_EMAILS", recipients)
-    monkeypatch.setattr(sending_service, "get_sender", lambda mode: sender)
+    monkeypatch.setattr(sending_service, "get_sender", lambda mode, **kw: sender)
 
 
 def _website_lead(client, **overrides):
@@ -119,3 +119,19 @@ def test_notification_escapes_visitor_input(client, monkeypatch):
     _website_lead(client, name="<script>x</script>", answers={"goal": "<b>hi</b>"})
     body = [m for m in sender.sent if m[0] == "kanth@example.com"][0][2]
     assert "<script>" not in body and "<b>hi</b>" not in body
+
+
+def test_team_alert_can_use_a_different_provider(monkeypatch):
+    """Visitor reports via MailerLite, team alerts via Gmail/Workspace."""
+    import app.config as config
+    from app.services import sending_service
+
+    monkeypatch.setattr(sending_service, "ALLOW_LIVE_SEND", True)
+    monkeypatch.setattr(sending_service, "EMAIL_PROVIDER", "mailerlite")
+    monkeypatch.setenv("GMAIL_ADDRESS", "team@example.com")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "abcdabcdabcdabcd")
+    monkeypatch.setenv("MAILERLITE_API_TOKEN", "tok")
+    monkeypatch.setenv("MAILERLITE_SENDER_EMAIL", "hello@example.com")
+    monkeypatch.setenv("MAILERLITE_SENDER_NAME", "MGA")
+    assert type(sending_service.get_sender("live")).__name__ == "MailerLiteSender"
+    assert type(sending_service.get_sender("live", provider="gmail")).__name__ == "GmailSender"

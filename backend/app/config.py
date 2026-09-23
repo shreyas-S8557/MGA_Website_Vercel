@@ -39,8 +39,17 @@ ALLOW_LIVE_SEND = os.environ.get("PROSPECT_ALLOW_LIVE_SEND", "false").lower() in
 )
 
 # Which email provider is used for live sends (see sending_service._PROVIDERS).
-# "mailerlite" is the default; "gmail" is an explicit, opt-in alternative.
+# "mailerlite" (default, new MailerLite), "mailerlite_classic" (Legacy/Classic
+# MailerLite accounts, which use a different API and API key) or "gmail".
 EMAIL_PROVIDER = os.environ.get("EMAIL_PROVIDER", "mailerlite").strip().lower()
+
+# Provider for the internal new-lead alert to LEAD_NOTIFY_EMAILS. Defaults to
+# EMAIL_PROVIDER; set TEAM_EMAIL_PROVIDER=gmail to send visitor reports
+# through MailerLite but team alerts from a Google Workspace mailbox (no
+# unsubscribe footer, and the team isn't added as MailerLite subscribers).
+TEAM_EMAIL_PROVIDER = (
+    os.environ.get("TEAM_EMAIL_PROVIDER", "").strip().lower() or EMAIL_PROVIDER
+)
 
 LOG_LEVEL = os.environ.get("PROSPECT_LOG_LEVEL", "INFO")
 
