@@ -33,7 +33,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from app.config import PUBLIC_API_BASE_URL
+from app.config import PUBLIC_API_BASE_URL, PUBLIC_SITE_DISPLAY, PUBLIC_SITE_URL
 from app.db import database
 from app.services import lead_magnet_service, lead_profile_service, pdf_service
 
@@ -287,7 +287,9 @@ def _generate_lead_magnet(row: dict[str, Any]) -> dict[str, Any]:
     content = lead_magnet_service.generate_personalized_content(profile)
     magnet_id = row.get("lead_magnet_id") or lead_magnet_service.generate_secure_lead_magnet_id()
     title = lead_magnet_service.select_lead_magnet_title(magnet_type)
-    path = pdf_service.render_lead_magnet(magnet_id, title, content, recipient_name=row.get("name"))
+    path = pdf_service.render_lead_magnet(
+        magnet_id, title, content, recipient_name=row.get("name"), profile=profile
+    )
 
     database.update_mga_lead(
         row["id"],
@@ -392,7 +394,7 @@ def _build_report_email(row: dict[str, Any], content: dict[str, Any]) -> tuple[s
         ("Where you're starting from", "starting_point"),
         ("Where you're headed", "desired_future_state"),
         ("What's in the way", "biggest_constraint"),
-        ("Your top 3 priorities", None),
+        ("Your top three priorities", None),
         ("Next 30 days", "next_30_days"),
         ("Next 90 days", "next_90_days"),
         ("One daily habit", "one_habit"),
@@ -440,7 +442,7 @@ def _build_report_email(row: dict[str, Any], content: dict[str, Any]) -> tuple[s
       {sections_html}
       {button_html}
       <p style="color:#8F8F8F;font-size:13px;margin-top:32px;">
-        My Growth Academy · mygrowthacademy.coach
+        My Growth Academy · <a href="{PUBLIC_SITE_URL}" style="color:#8F8F8F;">{PUBLIC_SITE_DISPLAY}</a>
       </p>
     </div>
     """

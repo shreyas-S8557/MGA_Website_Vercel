@@ -19,7 +19,7 @@ export default function MentorStorySection() {
           freedom from jobs, plenty of time with family and friends, living
           an abundant life and doing what we want to do, with who we want to
           do it with and make a difference in people&rsquo;s lives. Finding
-          mentors and getting mentored changed all of that. For over 2
+          mentors and getting mentored changed all of that. For over two
           decades, we have bought our lives back, we got the remote control
           to our happiness firmly in our own grasp.
         </p>

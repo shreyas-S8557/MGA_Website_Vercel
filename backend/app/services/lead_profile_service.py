@@ -53,7 +53,7 @@ FIELD_ALIASES: dict[str, list[str]] = {
     ],
     "desired_future_state": [
         "future state", "dream life", "where do you want to be", "vision",
-        "3 years from now", "where would you like your life to be",
+        "3 years from now", "three years from now", "where would you like your life to be",
     ],
     "growth_areas": ["areas would you most like to grow", "which areas would you like to grow"],
     "support_preferences": [

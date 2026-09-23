@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 /**
- * The site's lead magnet: "Your 3-Year Future Snapshot", a short on-page
+ * The site's lead magnet: "Your Three-Year Future Snapshot", a short on-page
  * quiz that hands the visitor a personalized Growth Blueprint the moment
  * they finish it — replacing the old flow, which sent every "Craft My
  * Future With AI" click out to an external Google Form (pure lead
@@ -18,10 +18,10 @@ import { createPortal } from "react-dom";
  * visitor gets the actual lead magnet in this modal too, not a "thanks,
  * we'll be in touch."
  *
- * The questions below are the real "3-Year Future Snapshot" questions
+ * The questions below are the real "Three-Year Future Snapshot" questions
  * (the same ones the original Google Form asked), and the `key` on each
  * is written to match backend/app/services/lead_profile_service.py's
- * FIELD_ALIASES exactly (e.g. "3 years from now", "biggest thing
+ * FIELD_ALIASES exactly (e.g. "three years from now", "biggest thing
  * standing", "realistically commit"), so the existing fuzzy-matching
  * profile step picks every answer up into the right canonical field with
  * no extra field_map plumbing.
@@ -64,8 +64,8 @@ type Field =
 const FIELDS: Field[] = [
   {
     type: "text",
-    key: "Where would you like your life to be 3 years from now?",
-    label: "Where would you like your life to be 3 years from now?",
+    key: "Where would you like your life to be three years from now?",
+    label: "Where would you like your life to be three years from now?",
     helper:
       "Think about your finances, work or business, personal life and relationships, health, and overall lifestyle.",
   },
@@ -81,7 +81,7 @@ const FIELDS: Field[] = [
     type: "multi",
     key: "Which areas would you most like to grow in right now?",
     label: "Which areas would you most like to grow in right now?",
-    helper: "Choose up to 3",
+    helper: "Choose up to three",
     maxSelect: 3,
     options: [
       "Leadership",
@@ -119,9 +119,9 @@ const FIELDS: Field[] = [
   },
   {
     type: "scale",
-    key: "How serious are you about changing your current trajectory over the next 3 years?",
+    key: "How serious are you about changing your current trajectory over the next three years?",
     label:
-      "How serious are you about changing your current trajectory over the next 3 years?",
+      "How serious are you about changing your current trajectory over the next three years?",
     lowLabel: "Just starting to think about it",
     highLabel: "Ready to make meaningful changes now",
     reasonKey: "What made you choose the above number?",
@@ -133,6 +133,10 @@ const FIELDS: Field[] = [
     options: ["Yes", "Maybe - I'd like to learn more", "Not right now"],
   },
 ];
+
+// House style: numbers below ten are written as words, 10 and above as digits.
+const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+const numberWord = (n: number) => (n >= 0 && n < 10 ? NUMBER_WORDS[n] : String(n));
 
 const TOTAL_STEPS = FIELDS.length + 1; // + the final name/email/phone step
 
@@ -294,7 +298,7 @@ export default function LeadMagnetModal({
           className="mga-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="Your 3-Year Future Snapshot"
+          aria-label="Your Three-Year Future Snapshot"
           onClick={(e) => {
             if (e.target === e.currentTarget) close();
           }}
@@ -315,7 +319,7 @@ export default function LeadMagnetModal({
                   Want to get clearer on your future?
                 </p>
                 <p className="mt-2 text-2xl font-bold text-mga-coral">
-                  Your 3-Year Future Snapshot
+                  Your Three-Year Future Snapshot
                 </p>
                 <p className="mx-auto mt-3 max-w-sm text-sm italic text-mga-accentBlue">
                   Answer a few quick questions about where you want to go and
@@ -328,7 +332,7 @@ export default function LeadMagnetModal({
                 <ol className="mt-6 space-y-4 text-left">
                   {[
                     {
-                      title: "Answer 7 quick questions",
+                      title: "Answer seven quick questions",
                       body: "About a minute — mostly quick picks, a couple of short answers.",
                     },
                     {
@@ -379,7 +383,7 @@ export default function LeadMagnetModal({
                     />
                   </div>
                   <p className="mt-2 text-center text-xs text-mga-gray">
-                    Step {stepIndex + 1} of {TOTAL_STEPS}
+                    Step {numberWord(stepIndex + 1)} of {numberWord(TOTAL_STEPS)}
                   </p>
                 </div>
 

@@ -64,6 +64,15 @@ MGA_LEAD_MAGNET_DIR = Path(
 # mga_lead_service.build_delivery_url) -- no email involved.
 PUBLIC_API_BASE_URL = os.environ.get("PUBLIC_API_BASE_URL", "http://localhost:8000")
 
+# The public website that lead magnets (PDF + delivery email) link back to.
+# Change this one value (e.g. to https://mygrowthacademy.coach) when the
+# site moves to its own domain -- nothing else needs editing.
+PUBLIC_SITE_URL = os.environ.get(
+    "PUBLIC_SITE_URL", "https://mygrowthacademy.vercel.app"
+).strip().rstrip("/")
+# The same address without "https://", for display text.
+PUBLIC_SITE_DISPLAY = PUBLIC_SITE_URL.split("://", 1)[-1]
+
 # --------------------------------------------------------------------------
 # Team notification for new website/Google Form leads.
 # --------------------------------------------------------------------------

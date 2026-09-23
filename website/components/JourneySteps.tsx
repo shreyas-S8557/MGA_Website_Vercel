@@ -2,23 +2,23 @@ import LeadMagnetModal from "./LeadMagnetModal";
 
 const steps = [
   {
-    title: "Step 1: Craft Your Future Desired State",
+    title: "Step One: Craft Your Future Desired State",
     body: "Fill out a short form writing your financial goals.",
   },
   {
-    title: "Step 2: 10-Day Vetting Experience",
+    title: "Step Two: 10-Day Vetting Experience",
     body: "Start actual mentorship: daily growth habits, mindset shifts, early momentum.",
   },
   {
-    title: "Step 3: Earn Your Spot",
+    title: "Step Three: Earn Your Spot",
     body: "Do the work. If you're consistent, you'll get a mentorship offer.",
   },
   {
-    title: "Step 4: Begin Long-Term Mentorship",
-    body: "Daily check-ins, quarterly 1-on-1s, monthly Q&As, on-demand WhatsApp support.",
+    title: "Step Four: Begin Long-Term Mentorship",
+    body: "Daily check-ins, quarterly one-on-ones, monthly Q&As, on-demand WhatsApp support.",
   },
   {
-    title: "Step 5: Compound Your Growth",
+    title: "Step Five: Compound Your Growth",
     body: "Grow your skills, mindset, and income—slowly, sustainably, for life.",
   },
 ];
@@ -70,7 +70,7 @@ export default function JourneySteps() {
             data-reveal="right"
             data-reveal-delay="150"
             src="/images/journey-illustration.png"
-            alt="A woman looking out a window, with the 5-step mentorship journey"
+            alt="A woman looking out a window, with the five-step mentorship journey"
             className="mga-illustration mx-auto w-full max-w-md rounded-lg shadow-md sm:ml-0 sm:justify-self-start"
           />
         </div>

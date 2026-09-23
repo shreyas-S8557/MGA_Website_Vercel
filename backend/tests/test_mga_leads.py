@@ -361,3 +361,41 @@ def test_copy_follows_house_style():
         assert not re.search(r"\bnot just\b|\bisn't about\b|\brather than\b", text.lower())
     for bad in banned:
         assert bad not in pdf_strings.lower(), bad
+
+
+def test_small_numbers_are_written_as_words_outside_quotes():
+    from app.services.lead_magnet_service import numbers_to_words
+
+    # the readiness score is the one exception: it keeps its digit
+    assert numbers_to_words("You rated yourself 7 out of 10.") == "You rated yourself 7 out of 10."
+    assert numbers_to_words("7 things") == "Seven things"
+    assert numbers_to_words("3 years") == "Three years"
+    assert numbers_to_words("a 3-year plan, 30 to 45 minutes") == "a three-year plan, 30 to 45 minutes"
+    # the person's own words stay exactly as written; scores/money/decimals untouched
+    assert numbers_to_words("\u201cI have 2 kids\u201d") == "\u201cI have 2 kids\u201d"
+    for kept in ("7/10", "$5", "3.5 hours", "9am", "10 minutes"):
+        assert numbers_to_words(kept) == kept
+
+
+def test_lead_magnet_copy_is_short():
+    from app.services.lead_magnet_service import _fallback_content
+
+    long = " ".join(["word"] * 80)
+    content = _fallback_content({
+        "primary_challenge": long, "desired_future_state": long, "seriousness_reason": long,
+        "growth_areas": ["Discipline"], "support_preferences": ["New skills or knowledge"],
+        "time_commitment": "Yes", "seriousness_score": "7",
+    })
+    for key, value in content.items():
+        assert len(value.split()) <= 35, (key, value)
+    assert "7 out of 10" in content["starting_point"]
+
+
+def test_llm_copy_is_capped(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
+    import app.services.lead_magnet_service as svc
+
+    chatty = "One sentence here. Another one. And a third. And a fourth."
+    monkeypatch.setattr(svc, "_generate_via_llm", lambda p: {k: chatty for k in svc._REQUIRED_KEYS})
+    content = svc.generate_personalized_content({})
+    assert all(v == "One sentence here. Another one." for v in content.values())

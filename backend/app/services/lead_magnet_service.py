@@ -50,7 +50,7 @@ _REQUIRED_KEYS = {
 
 _PROMPT_TEMPLATE = """You are one of the two mentors at My Growth Academy (Kanth and Shaku). \
 Someone has just answered a short questionnaire about where they want their life to be \
-in 3 years. Write a short, personal summary for them, as if you had sat with them for \
+in three years. Write a short, personal summary for them, as if you had sat with them for \
 half an hour, listened carefully, and are now writing back.
 
 Their answers:
@@ -63,9 +63,9 @@ priority_1, priority_2, priority_3, next_30_days, next_90_days, one_habit.
 What each key is for:
 - starting_point: where they are right now, from what they told you (their readiness
   score and reason, the areas they picked).
-- desired_future_state: where they said they'd like to be in 3 years.
+- desired_future_state: where they said they'd like to be in three years.
 - biggest_constraint: the thing they said is in their way.
-- priority_1..3: the first three things you'd suggest.
+- priority_1..3: the first three things you'd suggest (one short line each).
 - next_30_days / next_90_days: what to do this month, and by the end of month three.
 - one_habit: one small daily habit to start today.
 
@@ -74,7 +74,10 @@ How to write:
   talking to them ("you said...", "you told us...").
 - Refer to their actual answers. Quote their own words where it helps, and keep them
   as they wrote them, even if short or rough. Don't polish them into corporate language.
-- 1-3 short sentences per key.
+- Keep it short: one sentence per key, 20 words at most. The PDF shows the
+  visuals, so the words only need to carry the point.
+- Write whole numbers below ten as words ("three years"); 10 and above stay as
+  digits. The readiness score is the one exception: write it as digits ("7 out of 10"). Inside quotes, keep their words exactly as written.
 - Don't invent anything they didn't say: no goals, numbers, money, traits or history.
 - Never use dashes as punctuation (no em dashes, no en dashes, no double hyphens).
   Use commas, full stops, colons or a new sentence.
@@ -115,7 +118,23 @@ def generate_personalized_content(profile: dict[str, Any]) -> dict[str, str]:
     content = _generate_via_llm(profile)
     if not (content and _REQUIRED_KEYS.issubset(content.keys())):
         content = _fallback_content(profile)
-    return {k: _no_dashes(str(v)) for k, v in content.items()}
+    else:
+        content = {k: _keep_short(str(v)) for k, v in content.items()}
+    return {k: numbers_to_words(_no_dashes(str(v))) for k, v in content.items()}
+
+
+def _keep_short(text: str, max_sentences: int = 2, max_words: int = 40) -> str:
+    """Safety net for AI-written copy: keep at most two sentences (and about
+    40 words), so a chatty reply can't push the PDF onto extra pages."""
+    import re
+
+    sentences = re.split(r"(?<=[.!?\u201d])\s+(?=[A-Z\u201c])", text.strip())
+    out: list[str] = []
+    for sentence in sentences[:max_sentences]:
+        if out and len(" ".join(out + [sentence]).split()) > max_words:
+            break
+        out.append(sentence)
+    return " ".join(out)
 
 
 def _no_dashes(text: str) -> str:
@@ -184,34 +203,73 @@ def _commitment_sentence(commitment: Any) -> str:
     day?' answer (Yes / Most days / A few days a week / Not right now)."""
     text = str(commitment or "").strip().lower()
     if text.startswith("yes"):
-        return ("You said you could find 30 to 45 minutes a day, so let's use it. "
-                "Try to keep it at the same time each day. A little bit each day adds up quickly.")
+        return "Use your 30 to 45 minutes a day, at the same time each day."
     if "most days" in text:
-        return ("You said you could manage 30 to 45 minutes on most days. Decide which days "
-                "those are ahead of time, so it doesn't depend on how you feel that morning.")
+        return "Aim for 30 to 45 minutes on most days. Pick the days in advance."
     if "few days" in text:
-        return ("You said a few days a week feels realistic, so start there with 30 to 45 "
-                "minutes each time. Once that feels normal, add another day.")
+        return "Start with a few days a week, 30 to 45 minutes each time."
     if "not right now" in text:
-        return ("You mentioned that 30 to 45 minutes a day isn't possible right now, and that's "
-                "fine. Start with 10 minutes a day so you keep some momentum going.")
-    return "Set aside a small, fixed amount of time for this each day, at a time that suits you."
+        return "Start with 10 minutes a day to keep some momentum."
+    return "Set aside a little time each day, at a time that suits you."
 
 
-def _quote(text: str) -> str:
-    """Wrap the person's own words in quotes, keeping them as written
-    (only surrounding whitespace and trailing punctuation are trimmed)."""
+# Short names for the form's support options, so they fit on one line.
+_SUPPORT_SHORT = {
+    "mentorship from people who have already achieved results": "mentorship",
+    "a clearer plan or system": "a clear plan",
+    "better habits and consistency": "better habits",
+    "new skills or knowledge": "new skills",
+    "a supportive environment or community": "a supportive community",
+}
+
+
+def _quote(text: str, max_words: int = 20) -> str:
+    """Wrap the person's own words in quotes, keeping them as written (only
+    surrounding whitespace and trailing punctuation are trimmed). Very long
+    answers are cut to their first `max_words` words with an ellipsis so the
+    PDF stays short; the full answer is still in the team's lead alert."""
+    words = text.split()
+    if len(words) > max_words:
+        text = " ".join(words[:max_words]).rstrip(".,;:!?") + "\u2026"
     return f"\u201c{text}\u201d"
+
+
+_NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+
+
+def numbers_to_words(text: str) -> str:
+    """House style: whole numbers below ten are written as words
+    ("three-year"); 10 and above stay as digits. Exception: the readiness
+    score keeps its digit ("7 out of 10"). Text inside quote marks is the
+    person's own words and is left exactly as they wrote it. Scores like
+    7/10, decimals, times and money are left alone too."""
+    import re
+
+    parts = re.split(r"(\u201c[^\u201d]*\u201d|\"[^\"]*\")", str(text))
+    pattern = re.compile(
+        r"(?<![\d.,/:$\u00a3\u20b9\u20ac-])\b([0-9])\b(?![\d/:%]|[.,]\d|\s*(?:am|pm)\b|\s+out\s+of\s+10\b)"
+    )
+
+    def repl(match: "re.Match[str]") -> str:
+        word = _NUMBER_WORDS[int(match.group(1))]
+        before = match.string[: match.start()].rstrip()
+        if not before or before.endswith((".", "!", "?")):
+            word = word.capitalize()
+        return word
+
+    for i in range(0, len(parts), 2):
+        parts[i] = pattern.sub(repl, parts[i])
+    return "".join(parts)
 
 
 def _fallback_content(profile: dict[str, Any]) -> dict[str, str]:
     """Deterministic, template-based content used when no LLM is configured
-    or the LLM call fails. Written to read like a mentor responding to the
-    person's actual answers: their own words are quoted as-is rather than
-    rephrased. Prefers the real form's fields (growth_areas /
-    support_preferences / time_commitment / seriousness_*), falling back to
-    the older placeholder-form fields (financial_goal/current_stage) for
-    pre-existing submissions that only have those."""
+    or the LLM call fails. Deliberately short: each value is one line plus,
+    where there is one, the person's own words quoted as-is. The PDF adds
+    the visuals (readiness meter, focus-area tags, icons). Prefers the real
+    form's fields (growth_areas / support_preferences / time_commitment /
+    seriousness_*), falling back to the older placeholder-form fields
+    (financial_goal/current_stage) for pre-existing submissions."""
     challenge = _strip_end(profile.get("primary_challenge"))
     future = _strip_end(profile.get("desired_future_state") or profile.get("financial_goal"))
     growth_areas = [a for a in _as_list(profile.get("growth_areas")) if a.lower() != "other"]
@@ -225,74 +283,52 @@ def _fallback_content(profile: dict[str, Any]) -> dict[str, str]:
 
     # Where you are now
     if score:
-        starting = (
-            f"You put yourself at {score} out of 10 for how serious you are about making "
-            "changes over the next 3 years"
-        )
-        if reason:
-            starting += f", and you told us why: {_quote(reason + '.')} "
-            starting += "That's an honest answer, and it gives us somewhere specific to start."
-        else:
-            starting += "."
-        if growth_areas:
-            starting += f" The areas you picked were {growth_text}."
+        starting = f"You rated yourself {score} out of 10"
+        starting += f": {_quote(reason + '.')}" if reason else "."
     elif growth_areas:
-        starting = f"You told us you'd most like to grow in {growth_text}, so that's where we'll start."
+        starting = f"You'd most like to grow in {growth_text}."
     else:
-        starting = "Filling this in was a good first step, and it gives us something to start from."
+        starting = "Filling this in was a good first step."
 
     # Where you'd like to be
     if future:
-        short = len(future.split()) <= 5
-        desired = f"When we asked where you'd like your life to be in 3 years, you wrote: {_quote(future + '.')}"
-        if short:
-            desired += (
-                " Short and simple, which is fine. As we go, it'll help to picture what that "
-                "looks like day to day, so you'll know when you've got there."
-            )
+        desired = f"In 3 years, you'd like: {_quote(future + '.')}"
+        if len(future.split()) <= 5:
+            desired += " Let's picture what that looks like day to day."
     else:
-        desired = (
-            "You didn't say much about where you'd like to be in 3 years, and that's okay. "
-            "It's something we can work out together."
-        )
+        desired = "You didn't say yet, and that's okay. We can work it out together."
 
     # What's in the way
     if challenge:
         constraint = (
-            f"You said the biggest thing in your way right now is {_quote(challenge)}. "
-            "That's a really common one, and it usually gets easier once you have a simple "
-            "routine and someone checking in with you."
+            f"You named {_quote(challenge)}. It's common, and a simple routine with "
+            "regular check-ins helps."
         )
     else:
-        constraint = (
-            "You didn't name one thing that's holding you back. That's fine. "
-            "It often becomes clearer once you get started."
-        )
+        constraint = "Nothing named yet. It often gets clearer once you start."
 
     # Priorities
     if growth_areas:
-        p1 = f"Start with {growth_areas[0]}. It was the first area you picked, so let's begin there."
+        p1 = f"Start with {growth_areas[0]}, your first pick."
     else:
-        p1 = "Pick the one area of your life you'd most like to improve, and start there."
+        p1 = "Pick the one area you'd most like to improve."
     if support:
-        support_bits = [s[0].lower() + s[1:] for s in support]
-        p2 = (
-            f"Get some help along the way. You mentioned {_join_human(support_bits)}. "
-            "Having that around you means you won't be working it all out on your own."
-        )
+        bits: list[str] = []
+        for s_ in support:
+            short = _SUPPORT_SHORT.get(s_.strip().lower(), s_[0].lower() + s_[1:])
+            if short not in bits:
+                bits.append(short)
+        p2 = f"Get support: {_join_human(bits)}."
     else:
-        p2 = ("Get some help along the way, through a mentor and a clear plan, so you're not "
-              "working it all out on your own.")
+        p2 = "Get a mentor and a clear plan, so you're not doing it alone."
 
     next_30 = (
-        f"For the next month, do something small for {growth_text} each day. "
-        "It doesn't need to be big. Showing up regularly is what counts."
+        f"One small step a day on {growth_text}."
         if growth_areas else
-        "For the next month, do something small toward your goal each day. "
-        "It doesn't need to be big. Showing up regularly is what counts."
+        "One small step a day toward your goal."
     )
 
-    return {
+    content = {
         "starting_point": starting,
         "desired_future_state": desired,
         "biggest_constraint": constraint,
@@ -300,12 +336,10 @@ def _fallback_content(profile: dict[str, Any]) -> dict[str, str]:
         "priority_2": p2,
         "priority_3": _commitment_sentence(profile.get("time_commitment") or profile.get("current_stage")),
         "next_30_days": next_30,
-        "next_90_days": (
-            "By the end of month three, take what you've learned and turn it into a 90-day plan "
-            "with one clear goal you can actually check off."
-        ),
-        "one_habit": "Before bed, write down one small win from the day and one thing you're grateful for.",
+        "next_90_days": "Turn what you've learned into a 90-day plan with one clear goal.",
+        "one_habit": "Before bed, note one win and one thing you're grateful for.",
     }
+    return {k: numbers_to_words(v) for k, v in content.items()}
 
 
 def generate_secure_lead_magnet_id() -> str:
