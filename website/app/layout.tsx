@@ -27,9 +27,6 @@ export const metadata: Metadata = {
     "My Growth Academy | The Only Mentorship That Grows You and Your Income",
   description:
     "If you're a couple in your twenties or thirties wanting to build a prosperous financial future, My Growth Academy mentors you step-by-step with proven systems, daily accountability, and a unique payment model tied to the shopping you already do.",
-  icons: {
-    icon: "/favicon.ico",
-  },
   openGraph: {
     title:
       "My Growth Academy | The Only Mentorship That Grows You and Your Income",
