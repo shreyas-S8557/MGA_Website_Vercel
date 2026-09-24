@@ -41,7 +41,7 @@ gets notified about each new lead.
 
 ```bash
 cd backend
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp ../.env.example ../.env        # then fill it in -- see section 3
 uvicorn app.main:app --reload --port 8000
 ```
@@ -167,31 +167,45 @@ trigger. The question text doesn't have to be fixed: see `FIELD_ALIASES` in
 ## 8. Deploying
 
 - **Website:** deploy `website/` to Vercel (see `website/vercel.json`).
-- **Backend:** needs a persistent disk for the SQLite file and PDFs, so use
-  Render, Fly.io or a small VM. Don't use Vercel serverless functions,
-  which don't keep files between invocations. Set `DASHBOARD_API_KEY`,
-  `PUBLIC_API_BASE_URL` and `PROSPECT_CORS_ORIGINS`, and turn on
-  `PROSPECT_ALLOW_LIVE_SEND` once email is tested.
+- **Backend:** a second Vercel project with `backend/` as its root, storing
+  leads in Turso. Steps below. (It also runs anywhere with a real disk,
+  such as a small VM, using the local SQLite file instead.)
 
-### Render
+### Backend on Vercel
 
-`render.yaml` at the repo root sets everything up: Render dashboard →
-New → Blueprint → pick this repo, then fill in the secrets it asks for.
+The backend deploys as its own Vercel project from this same repo
+(`backend/vercel.json`; Vercel finds the FastAPI app in `app/main.py`).
 
-- It uses a paid **Starter** instance with a 1 GB disk at `/var/data`
-  (`DATA_DIR=/var/data`). Without the disk, every deploy or restart wipes
-  the SQLite file, so all leads are lost. PDFs are rebuilt on demand from
-  the stored report if their file is missing, so download links survive
-  either way.
-- Leave `PUBLIC_API_BASE_URL` empty to use the service's own
-  `https://<name>.onrender.com` address, or set it to a custom domain.
-  Point the website's `NEXT_PUBLIC_API_URL` (Vercel) at the same address.
-- The website's origin (`PUBLIC_SITE_URL`) is always allowed by CORS.
-- Free Render instances block SMTP, so `TEAM_EMAIL_PROVIDER=gmail` only
-  works on a paid instance. Otherwise leave it empty to send team alerts
-  through MailerLite.
-- The start command runs uvicorn with `--proxy-headers` so the rate limit
-  sees each visitor's real IP instead of Render's load balancer.
+1. **Create the database.** Vercel functions have no permanent disk, so
+   leads live in [Turso](https://turso.tech) (hosted SQLite, free tier).
+   Install the Turso integration from the Vercel Marketplace, or create a
+   database at turso.tech in **AWS us-east-1** (next to Vercel's default
+   `iad1` function region). You need its URL (`libsql://...turso.io`) and
+   an auth token. The table is created automatically on first use.
+2. **New Vercel project** → import this repo → **Root Directory:
+   `backend`**. Framework: FastAPI (auto-detected).
+3. **Environment variables** (Project → Settings → Environment Variables):
+   `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `DASHBOARD_API_KEY`,
+   `GOOGLE_FORM_WEBHOOK_SECRET`, the MailerLite ones, `OPENAI_API_KEY` (+
+   `OPENAI_BASE_URL`, `LLM_MODEL`), `LEAD_NOTIFY_EMAILS`, and
+   `PROSPECT_ALLOW_LIVE_SEND=true` once email is tested. See `.env.example`.
+4. Deploy, then open `https://<backend>.vercel.app/api/health`. It must
+   say `"status": "ok"` with a `turso:` database path. `"degraded"` means
+   Turso isn't configured or reachable.
+5. In the **website** project, set `NEXT_PUBLIC_API_URL` to the backend's
+   URL and redeploy it.
+
+Notes:
+
+- `PUBLIC_API_BASE_URL` defaults to the backend project's production
+  domain; set it only if you give the backend a custom domain.
+- Generated PDFs go to `/tmp`, which Vercel clears whenever it likes;
+  they're rebuilt from the database on the next download, so links never
+  break.
+- The website's origin (`PUBLIC_SITE_URL`) is always allowed by CORS; add
+  any other origins (e.g. your custom domain) to `PROSPECT_CORS_ORIGINS`.
+- The per-visitor rate limit is kept in memory, so each running instance
+  counts separately. Fine as basic spam protection at this scale.
 
 ## 9. Tests
 

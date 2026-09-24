@@ -20,8 +20,12 @@ logger = logging.getLogger("mga.backend")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    database.init_app_tables()
-    logger.info("Backend started. Database: %s", database.DB_PATH)
+    try:
+        database.init_app_tables()
+    except database.DatabaseError:
+        # Retried automatically on the first query; don't refuse to boot.
+        logger.exception("Database not reachable at startup: %s", database.describe())
+    logger.info("Backend started. Database: %s", database.describe())
     yield
 
 

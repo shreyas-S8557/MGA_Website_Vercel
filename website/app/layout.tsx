@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 // Two-font system matching the live Wix site: Roboto for body copy,
@@ -62,7 +64,15 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap"
         />
       </head>
-      <body className="bg-mga-bgLight font-sans">{children}</body>
+      <body className="bg-mga-bgLight font-sans">
+        {children}
+        {/* Vercel Web Analytics (visitors, pages, referrers, countries) and
+            Speed Insights (real-visitor load times). Both only report on
+            Vercel deployments, and need turning on once in the project's
+            Analytics / Speed Insights tabs. No cookies. */}
+        <Analytics />
+        <SpeedInsights />
+      </body>
     </html>
   );
 }

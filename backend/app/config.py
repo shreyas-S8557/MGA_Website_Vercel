@@ -9,13 +9,22 @@ REPO_ROOT = env.REPO_ROOT
 
 # True when running on Render (Render sets RENDER=true on every service).
 ON_RENDER = os.environ.get("RENDER", "").lower() == "true"
+# True when running as a Vercel Function (Vercel sets VERCEL=1).
+ON_VERCEL = os.environ.get("VERCEL", "") == "1"
 
 # Folder for everything this backend writes (the SQLite file + generated
 # PDFs). On Render the app's own folder is wiped on every deploy/restart,
 # so point DATA_DIR at the mount path of a Render persistent disk (e.g.
 # /var/data). PROSPECT_DB_PATH / MGA_LEAD_MAGNET_DIR still override the
 # individual locations.
-DATA_DIR = Path(os.environ.get("DATA_DIR", "").strip() or str(REPO_ROOT / "data"))
+# On Vercel the only writable folder is /tmp (temporary, per instance):
+# fine for generated PDFs, which are rebuilt on demand from the database,
+# but leads themselves must live in Turso (TURSO_DATABASE_URL, see
+# app/db/database.py).
+DATA_DIR = Path(
+    os.environ.get("DATA_DIR", "").strip()
+    or ("/tmp/mga-data" if ON_VERCEL else str(REPO_ROOT / "data"))
+)
 
 # SQLite file holding the mga_leads table. Override with PROSPECT_DB_PATH
 # (e.g. for tests or a persistent-disk path in production).
@@ -100,9 +109,13 @@ MGA_LEAD_MAGNET_DIR = Path(
 # address (RENDER_EXTERNAL_URL, set by Render) so emailed download links
 # never point at localhost. Set PUBLIC_API_BASE_URL explicitly when the API
 # has a custom domain (e.g. https://api.mygrowthacademy.coach).
+# On Vercel, falls back to the project's production domain
+# (VERCEL_PROJECT_PRODUCTION_URL, set by Vercel without the https://).
+_vercel_host = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL", "").strip()
 PUBLIC_API_BASE_URL = (
     os.environ.get("PUBLIC_API_BASE_URL", "").strip()
     or os.environ.get("RENDER_EXTERNAL_URL", "").strip()
+    or (f"https://{_vercel_host}" if _vercel_host else "")
     or "http://localhost:8000"
 ).rstrip("/")
 
