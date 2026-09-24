@@ -261,6 +261,25 @@ def test_successful_delivery_makes_lead_magnet_downloadable(client):
     assert download.headers["content-type"] == "application/pdf"
 
 
+def test_download_rebuilds_pdf_wiped_by_redeploy(client):
+    """On Render the filesystem is wiped on every deploy; the download link
+    must keep working by re-rendering the PDF from the stored content."""
+    import glob
+    import os
+
+    import app.config as config
+
+    resp = client.post("/api/leads/google-form", json=_payload(email="jordan@example.com"), headers=AUTH)
+    detail = client.get(f"/api/dashboard/mga-leads/{resp.json()['lead_id']}").json()
+    for f in glob.glob(os.path.join(config.MGA_LEAD_MAGNET_DIR, "*.pdf")):
+        os.remove(f)
+
+    download = client.get(detail["lead_magnet_delivery_url"])
+    assert download.status_code == 200
+    assert download.content.startswith(b"%PDF")
+    assert client.get("/api/lead-magnets/does-not-exist").status_code == 404
+
+
 def test_retry_on_already_delivered_lead_is_idempotent(client):
     """Re-running the pipeline on an already-DELIVERED lead (e.g. via a
     manual retry click) must not regenerate the lead magnet or otherwise

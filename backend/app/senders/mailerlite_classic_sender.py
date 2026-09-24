@@ -86,6 +86,11 @@ def _plain_text(body_html: str) -> str:
     return f"{text}\n\nView this email in your browser: {{$url}}\nUnsubscribe: {{$unsubscribe}}"
 
 
+def _split_name(name: str) -> tuple[str, str]:
+    parts = (name or "").strip().split(None, 1)
+    return (parts[0] if parts else "", parts[1] if len(parts) > 1 else "")
+
+
 class MailerLiteClassicSender:
     """Same interface as MailerLiteSender / GmailSender: validate_credentials(),
     check_configuration(), send(), send_test_email()."""
@@ -286,6 +291,40 @@ class MailerLiteClassicSender:
             if status == 429:
                 return SendResult(success=False, error="MailerLite rate limit exceeded (429).")
             return SendResult(success=False, error=f"MailerLite API error (HTTP {status}): {detail}")
+        except httpx.RequestError as exc:
+            return SendResult(success=False, error=f"Network error contacting MailerLite: {exc}")
+
+    def add_to_list(
+        self, email: str, name: str = "", phone: str = "", *, group_id: str,
+        trigger_automations: bool = False,
+    ) -> SendResult:
+        """Add (or update) the lead in one of the account's real groups, e.g.
+        "MGA New Website Subs", with their name and phone. Never raises."""
+        first, last = _split_name(name)
+        fields = {k: v for k, v in (("last_name", last), ("phone", (phone or "").strip())) if v}
+        payload: dict[str, Any] = {
+            "email": email.strip(),
+            "resubscribe": False,
+            "autoresponders": bool(trigger_automations),
+        }
+        if first:
+            payload["name"] = first
+        if fields:
+            payload["fields"] = fields
+        try:
+            self.validate_credentials()
+            data = self._request("POST", f"/groups/{group_id}/subscribers", json=payload) or {}
+            return SendResult(success=True, message_id=str(data.get("id", "")))
+        except MailerLiteCredentialsError as exc:
+            return SendResult(success=False, error=str(exc), retryable=False)
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            hint = " (check MAILERLITE_LEADS_GROUP_ID)" if status == 404 else ""
+            return SendResult(
+                success=False,
+                error=f"Adding to MailerLite group {group_id} failed (HTTP {status}): "
+                      f"{_error_detail(exc)}{hint}",
+            )
         except httpx.RequestError as exc:
             return SendResult(success=False, error=f"Network error contacting MailerLite: {exc}")
 

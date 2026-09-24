@@ -112,6 +112,11 @@ def _body_to_html(body: str) -> str:
     return "<html><body><p>" + escaped.replace("\n", "<br>\n") + "</p></body></html>"
 
 
+def _split_name(name: str) -> tuple[str, str]:
+    parts = (name or "").strip().split(None, 1)
+    return (parts[0] if parts else "", parts[1] if len(parts) > 1 else "")
+
+
 class MailerLiteSender:
     """Thin, mockable adapter around the MailerLite REST API.
 
@@ -361,6 +366,28 @@ class MailerLiteSender:
             )
         except httpx.RequestError as exc:
             return SendResult(success=False, error=f"Network error contacting MailerLite: {exc}", retryable=True)
+
+    def add_to_list(
+        self, email: str, name: str = "", phone: str = "", *, group_id: str,
+        trigger_automations: bool = False,  # noqa: ARG002 -- new API has no switch
+    ) -> SendResult:
+        """Add (or update) the lead in one of the account's real groups with
+        their name and phone. Never raises."""
+        first, last = _split_name(name)
+        fields = {k: v for k, v in (("name", first), ("last_name", last),
+                                    ("phone", (phone or "").strip())) if v}
+        try:
+            self.validate_credentials()
+            self._request("POST", "/subscribers",
+                          json={"email": email.strip(), "fields": fields, "groups": [str(group_id)]})
+            return SendResult(success=True)
+        except MailerLiteCredentialsError as exc:
+            return SendResult(success=False, error=str(exc), retryable=False)
+        except httpx.HTTPStatusError as exc:
+            return SendResult(success=False, error=f"Adding to MailerLite group {group_id} failed "
+                              f"(HTTP {exc.response.status_code}): {_error_detail(exc)}")
+        except httpx.RequestError as exc:
+            return SendResult(success=False, error=f"Network error contacting MailerLite: {exc}")
 
     def _cleanup_old_outbox_groups(self) -> int:
         """Best-effort housekeeping: delete one-off outbox groups older than

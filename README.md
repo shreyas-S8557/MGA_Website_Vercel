@@ -173,6 +173,26 @@ trigger. The question text doesn't have to be fixed: see `FIELD_ALIASES` in
   `PUBLIC_API_BASE_URL` and `PROSPECT_CORS_ORIGINS`, and turn on
   `PROSPECT_ALLOW_LIVE_SEND` once email is tested.
 
+### Render
+
+`render.yaml` at the repo root sets everything up: Render dashboard →
+New → Blueprint → pick this repo, then fill in the secrets it asks for.
+
+- It uses a paid **Starter** instance with a 1 GB disk at `/var/data`
+  (`DATA_DIR=/var/data`). Without the disk, every deploy or restart wipes
+  the SQLite file, so all leads are lost. PDFs are rebuilt on demand from
+  the stored report if their file is missing, so download links survive
+  either way.
+- Leave `PUBLIC_API_BASE_URL` empty to use the service's own
+  `https://<name>.onrender.com` address, or set it to a custom domain.
+  Point the website's `NEXT_PUBLIC_API_URL` (Vercel) at the same address.
+- The website's origin (`PUBLIC_SITE_URL`) is always allowed by CORS.
+- Free Render instances block SMTP, so `TEAM_EMAIL_PROVIDER=gmail` only
+  works on a paid instance. Otherwise leave it empty to send team alerts
+  through MailerLite.
+- The start command runs uvicorn with `--proxy-headers` so the rate limit
+  sees each visitor's real IP instead of Render's load balancer.
+
 ## 9. Tests
 
 No network or API keys needed. Real email is never sent.

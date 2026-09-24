@@ -37,7 +37,9 @@ export default function RealResults() {
 
   return (
     <section className="bg-mga-bgLight">
-      <div className="bg-mga-navy px-6 py-6 text-center">
+      {/* Full-width navy band behind the heading -- the break between the
+          cream hero above and the cream slides below. */}
+      <div className="bg-mga-navy px-6 py-10 text-center">
         <h2 data-reveal="up" className="font-heading text-3xl font-bold text-white sm:text-4xl">
           Real Couples. Real Results.
         </h2>

@@ -73,12 +73,25 @@ _RATE_MAX_PER_WINDOW = 30
 _rate_hits: dict[str, list[float]] = defaultdict(list)
 
 
+def client_ip(request: Request) -> str:
+    """The visitor's real IP. Behind Render's (or any) load balancer,
+    request.client.host is the proxy's address -- the same for every
+    visitor -- so the rate limit would be shared by the whole internet.
+    The proxy puts the real address first in X-Forwarded-For."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        first = forwarded.split(",", 1)[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else "unknown"
+
+
 def rate_limit_webhook(request: Request) -> None:
-    client_ip = request.client.host if request.client else "unknown"
+    ip = client_ip(request)
     now = time.time()
     window_start = now - _RATE_WINDOW_SECONDS
-    hits = [t for t in _rate_hits[client_ip] if t >= window_start]
+    hits = [t for t in _rate_hits[ip] if t >= window_start]
     hits.append(now)
-    _rate_hits[client_ip] = hits
+    _rate_hits[ip] = hits
     if len(hits) > _RATE_MAX_PER_WINDOW:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests.")

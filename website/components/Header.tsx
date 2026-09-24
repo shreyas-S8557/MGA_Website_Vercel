@@ -11,16 +11,13 @@
 // overlapping the very top of page content rather than reserving its own
 // space above it.
 //
-// The tint is navy (not white): a white/40 overlay over the now-dark-navy
-// hero blends to a light periwinkle-blue box that visibly clashes with the
-// site's dark-blue-forward palette (confirmed by sampling the rendered
-// pixels — white/40 over #36488F comes out ~rgb(134,145,188), noticeably
-// lighter/bluer than anything else on the page). A navy-tinted overlay
-// still shows the section behind it through and still blurs/lightens on
-// scroll, but leans toward the palette instead of away from it.
+// The tint is cream (the hero's own colour), so over the cream hero the bar
+// is nearly invisible and the full-colour logo -- navy "my", coral
+// "growth" -- sits on the background it was designed for. Scrolling over
+// the navy sections, the blur shows them through as a soft, lighter band.
 export default function Header() {
   return (
-    <header className="mga-header-in fixed inset-x-0 top-0 z-50 bg-mga-navy/30 px-6 py-4 backdrop-blur-md">
+    <header className="mga-header-in fixed inset-x-0 top-0 z-50 border-b border-mga-heading/10 bg-mga-bgLight/70 px-6 py-4 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center">
         <a href="#" aria-label="My Growth Academy home">
           {/* eslint-disable-next-line @next/next/no-img-element */}

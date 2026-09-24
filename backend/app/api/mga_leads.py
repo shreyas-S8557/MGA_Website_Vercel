@@ -119,10 +119,13 @@ def download_lead_magnet(lead_magnet_id: str):
     from app.db import database
 
     row = database.get_mga_lead_by_magnet_id(lead_magnet_id)
-    if not row or not row.get("lead_magnet_path"):
+    # Re-renders the PDF from the stored content if the file is gone (Render
+    # wipes the filesystem on every deploy/restart unless a disk is attached).
+    path = mga_lead_service.ensure_lead_magnet_file(row) if row else None
+    if not path:
         raise HTTPException(status_code=404, detail="Lead magnet not found.")
     return FileResponse(
-        row["lead_magnet_path"],
+        path,
         media_type="application/pdf",
         filename="My-Growth-Academy-Personalized-Growth-Map.pdf",
     )

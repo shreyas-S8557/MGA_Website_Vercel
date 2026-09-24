@@ -15,8 +15,8 @@ module.exports = {
         mga: {
           bg: "#969CBD", // saturated periwinkle, matches the real site exactly, but no longer used on this site by request — the user asked to replace it everywhere with the dark navy below since "light blue doesn't look good"; kept defined in case it's wanted back
           band: "#CBC9DA", // lighter lavender — thin heading-only banner for "How MGA Mentorship Works?" ONLY
-          bgLight: "#FFF6EF", // cream — Real Results section bg + modal/lightbox card bg (confirmed exact match in scrape: #FFF6EF)
-          navy: "#36488F", // dark navy — now the Hero + mentors/video section bg (swapped in place of the periwinkle `bg` above by request), the mentor-story section bg, AND the "Real Couples. Real Results." heading banner (confirmed exact match in scrape: #36488F)
+          bgLight: "#FFF6EF", // cream — Hero bg + header tint + Real Results section bg + modal/lightbox card bg (confirmed exact match in scrape: #FFF6EF)
+          navy: "#36488F", // dark navy — mentors/video section bg (the Hero is now cream by request) (swapped in place of the periwinkle `bg` above by request), the mentor-story section bg, AND the "Real Couples. Real Results." heading banner (confirmed exact match in scrape: #36488F)
           heading: "#36488F", // indigo heading text (same value as navy bg, used differently per-section)
           coral: "#C84739", // solid coral CTA button + coral heading text (confirmed exact match in scrape: #C84739)
           accentBlue: "#2A3690", // italic secondary copy (e.g. inside the modal)

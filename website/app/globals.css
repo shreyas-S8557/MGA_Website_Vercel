@@ -175,7 +175,7 @@ h6 {
 }
 
 /* Hairline (0.05px, 30% opacity) outline that follows the logo's own shape, just enough
-   to separate the navy lettering from the navy header. Original brand
+   to separate the navy lettering when the header passes over navy sections. Original brand
    colours; the PNG is upscaled 3x and sharpened for crisp edges. */
 .mga-logo-outline {
   filter:

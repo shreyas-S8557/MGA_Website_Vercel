@@ -1,0 +1,64 @@
+# Render Blueprint for the MGA lead-magnet backend.
+# Render dashboard -> New -> Blueprint -> pick this repo. Secrets marked
+# `sync: false` are asked for once in the dashboard, never stored in git.
+services:
+  - type: web
+    name: mga-backend
+    runtime: python
+    rootDir: backend
+    # A persistent disk needs a paid instance. On "free", the SQLite DB and
+    # PDFs are wiped on every deploy/restart (PDFs re-render on demand, but
+    # leads are lost) -- and free instances also block SMTP (Gmail).
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    # --proxy-headers so the app sees https + the visitor's real IP behind
+    # Render's load balancer. Must bind 0.0.0.0:$PORT.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    disk:
+      name: mga-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATA_DIR
+        value: /var/data
+      - key: PUBLIC_SITE_URL
+        value: https://mygrowthacademy.vercel.app
+      - key: PROSPECT_CORS_ORIGINS
+        value: https://mygrowthacademy.vercel.app,https://mygrowthacademy.coach,https://www.mygrowthacademy.coach
+      - key: EMAIL_PROVIDER
+        value: mailerlite_classic
+      - key: PROSPECT_ALLOW_LIVE_SEND
+        value: "true"
+      - key: DASHBOARD_AUTH_DISABLED
+        value: "false"
+      - key: PUBLIC_API_BASE_URL   # leave empty to use the .onrender.com URL
+        sync: false
+      - key: TEAM_EMAIL_PROVIDER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: LLM_MODEL
+        value: auto
+      - key: MAILERLITE_API_TOKEN
+        sync: false
+      - key: MAILERLITE_SENDER_EMAIL
+        sync: false
+      - key: MAILERLITE_SENDER_NAME
+        value: My Growth Academy
+      - key: MAILERLITE_LEADS_GROUP_ID
+        sync: false
+      - key: LEAD_NOTIFY_EMAILS
+        sync: false
+      - key: GMAIL_ADDRESS
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: GOOGLE_FORM_WEBHOOK_SECRET
+        generateValue: true
+      - key: DASHBOARD_API_KEY
+        generateValue: true

@@ -332,9 +332,83 @@ def _deliver(row: dict[str, Any]) -> dict[str, Any]:
 
     updates: dict[str, Any] = {"delivered_at": _utc_now_iso()}
     updates.update(_send_report_email(row))
+    list_error = _add_to_mailerlite_list(row)
+    if list_error:
+        updates["email_error"] = "; ".join(
+            e for e in (updates.get("email_error", ""), list_error) if e
+        )[:2000]
 
     database.update_mga_lead(row["id"], updates)
     return database.get_mga_lead(row["id"])
+
+
+def ensure_lead_magnet_file(row: dict[str, Any]) -> str | None:
+    """Path to the lead's PDF, re-rendering it first if the file is gone.
+
+    On Render the filesystem is wiped on every deploy/restart unless a
+    persistent disk is attached (DATA_DIR), so a PDF generated yesterday
+    can be missing today even though the lead row still exists. Everything
+    needed to rebuild it (content, profile, name) is stored on the row, so
+    the same PDF is rebuilt on demand instead of the download link 404ing.
+    Also copes with a stored absolute path that moved (e.g. DATA_DIR
+    changed). Returns None if the lead never had a report generated."""
+    import os
+
+    import app.config as config
+
+    magnet_id = row.get("lead_magnet_id") or ""
+    if not magnet_id:
+        return None
+
+    stored = row.get("lead_magnet_path") or ""
+    if stored and os.path.isfile(stored):
+        return stored
+    expected = os.path.join(config.MGA_LEAD_MAGNET_DIR, f"{magnet_id}.pdf")
+    if os.path.isfile(expected):
+        path = expected
+    else:
+        content = _load_json(row.get("lead_magnet_content_json", ""), {})
+        if not content:
+            return None
+        title = content.pop("title", "") or lead_magnet_service.select_lead_magnet_title(
+            row.get("lead_magnet_type") or ""
+        )
+        profile = _load_json(row.get("profile_json", ""), {})
+        path = pdf_service.render_lead_magnet(
+            magnet_id, title, content, recipient_name=row.get("name"), profile=profile
+        )
+    if path != stored and row.get("id"):
+        database.update_mga_lead(row["id"], {"lead_magnet_path": path})
+    return path
+
+
+def _add_to_mailerlite_list(row: dict[str, Any]) -> str:
+    """Best-effort: add the lead (name, email, phone) to the MailerLite group
+    in MAILERLITE_LEADS_GROUP_ID, e.g. "MGA New Website Subs". Only when live
+    sending is on and a MailerLite provider is in use. Returns an error
+    message, or "" on success / when switched off. Never raises."""
+    import app.config as config
+
+    group_id = config.MAILERLITE_LEADS_GROUP_ID
+    email = (row.get("email") or "").strip()
+    if not group_id or not email or not config.ALLOW_LIVE_SEND:
+        return ""
+    if config.EMAIL_PROVIDER not in ("mailerlite", "mailerlite_classic"):
+        return ""
+    from app.services.sending_service import SendModeNotAllowed, get_sender
+
+    try:
+        sender = get_sender("live")
+        result = sender.add_to_list(
+            email, row.get("name") or "", row.get("phone") or "",
+            group_id=group_id,
+            trigger_automations=config.MAILERLITE_LEADS_TRIGGER_AUTOMATIONS,
+        )
+    except SendModeNotAllowed:
+        return ""
+    except Exception as exc:  # noqa: BLE001 -- list sync must never affect delivery
+        return f"Adding to MailerLite list failed: {exc}"[:500]
+    return "" if result.success else (result.error or "Adding to MailerLite list failed.")
 
 
 def _send_report_email(row: dict[str, Any]) -> dict[str, Any]:
@@ -367,7 +441,7 @@ def _send_report_email(row: dict[str, Any]) -> dict[str, Any]:
             subject,
             body_html,
             from_name="My Growth Academy",
-            attachments=[row["lead_magnet_path"]] if row.get("lead_magnet_path") else None,
+            attachments=[path] if (path := _safe_pdf_path(row)) else None,
         )
     except Exception as exc:  # noqa: BLE001 -- an ESP/network error must never break delivery
         return {"email_sent": 0, "email_error": str(exc)[:2000]}
@@ -375,6 +449,15 @@ def _send_report_email(row: dict[str, Any]) -> dict[str, Any]:
     if result.success:
         return {"email_sent": 1, "email_sent_at": _utc_now_iso(), "email_error": ""}
     return {"email_sent": 0, "email_error": (result.error or "Send failed.")[:2000]}
+
+
+def _safe_pdf_path(row: dict[str, Any]) -> str | None:
+    """ensure_lead_magnet_file, but an attachment problem never blocks the
+    email itself (the body still carries the download link)."""
+    try:
+        return ensure_lead_magnet_file(row)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _build_report_email(row: dict[str, Any], content: dict[str, Any]) -> tuple[str, str]:

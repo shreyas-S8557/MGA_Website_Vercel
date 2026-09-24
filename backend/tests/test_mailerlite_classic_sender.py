@@ -130,3 +130,54 @@ def test_classic_provider_is_selectable(monkeypatch):
     monkeypatch.setenv("MAILERLITE_SENDER_NAME", "MGA")
     sender = sending_service.get_sender("live", provider="mailerlite_classic")
     assert type(sender).__name__ == "MailerLiteClassicSender"
+
+
+def test_classic_adds_lead_to_real_group_with_name_and_phone():
+    routes = _routes({("POST", "/groups/112974522/subscribers"): _Resp(200, {"id": 9})})
+    calls: list = []
+    result = _sender(routes, calls).add_to_list(
+        "priya@example.com", "Priya Shah", "+91 98765 43210", group_id="112974522"
+    )
+    assert result.success
+    method, path, payload, headers = calls[0]
+    assert (method, path) == ("POST", "/groups/112974522/subscribers")
+    assert payload == {
+        "email": "priya@example.com", "name": "Priya",
+        "fields": {"last_name": "Shah", "phone": "+91 98765 43210"},
+        "resubscribe": False, "autoresponders": False,  # group automations off by default
+    }
+
+
+def test_classic_wrong_group_id_is_reported():
+    calls: list = []
+    result = _sender(_routes(), calls).add_to_list("a@example.com", group_id="999")
+    assert not result.success and "MAILERLITE_LEADS_GROUP_ID" in result.error
+
+
+def test_pipeline_adds_lead_to_group_only_when_configured(monkeypatch):
+    import app.config as config
+    from app.services import mga_lead_service, sending_service
+
+    added = []
+
+    class _Fake:
+        def add_to_list(self, email, name="", phone="", *, group_id, trigger_automations=False):
+            added.append((email, name, phone, group_id, trigger_automations))
+            from app.senders.mailerlite_sender import SendResult
+            return SendResult(success=True)
+
+    monkeypatch.setattr(sending_service, "get_sender", lambda mode, **kw: _Fake())
+    row = {"email": "priya@example.com", "name": "Priya Shah", "phone": "123"}
+
+    monkeypatch.setattr(config, "MAILERLITE_LEADS_GROUP_ID", "")
+    monkeypatch.setattr(config, "ALLOW_LIVE_SEND", True)
+    monkeypatch.setattr(config, "EMAIL_PROVIDER", "mailerlite_classic")
+    assert mga_lead_service._add_to_mailerlite_list(row) == "" and added == []
+
+    monkeypatch.setattr(config, "MAILERLITE_LEADS_GROUP_ID", "112974522")
+    monkeypatch.setattr(config, "ALLOW_LIVE_SEND", False)
+    assert mga_lead_service._add_to_mailerlite_list(row) == "" and added == []
+
+    monkeypatch.setattr(config, "ALLOW_LIVE_SEND", True)
+    assert mga_lead_service._add_to_mailerlite_list(row) == ""
+    assert added == [("priya@example.com", "Priya Shah", "123", "112974522", False)]
