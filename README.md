@@ -91,19 +91,22 @@ root lists all of them with comments. The important ones:
 | `DASHBOARD_API_KEY` | **Required.** Protects the dashboard and every dashboard API route (lead names, emails, phones). If it's unset those routes are locked. |
 | `PUBLIC_API_BASE_URL` | This backend's public URL, used in the PDF download links. Must be set before going live. |
 | `PROSPECT_CORS_ORIGINS` | Browser origins allowed to call the API. Add the live website origin. |
-| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `LLM_MODEL` | Optional LLM personalization of the report. Without a key, a deterministic template is used. |
-| `PROSPECT_ALLOW_LIVE_SEND` | Master switch for real email. Off by default. |
+| `GEMINI_API_KEY` / `LLM_MODEL` | Google Gemini (free) personalizes the report. Without a key, a deterministic template is used. See `SETUP_GUIDE.md`. |
+| `PROSPECT_ALLOW_LIVE_SEND` | Master switch for real email. On (`true`) by default; set `false` to pause all email. |
 | `EMAIL_PROVIDER` | `mailerlite` (default) or `gmail`. |
 | `MAILERLITE_API_TOKEN` / `MAILERLITE_SENDER_EMAIL` / `MAILERLITE_SENDER_NAME` | MailerLite credentials (sender must be verified in MailerLite). |
 | `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` | Gmail credentials, if `EMAIL_PROVIDER=gmail`. |
 | `LEAD_NOTIFY_EMAILS` | Comma-separated team addresses to alert about each new lead. |
 | `GOOGLE_FORM_WEBHOOK_SECRET` | Only for the Google Form path and the dashboard's Retry button. |
+| `GOOGLE_SHEETS_WEBHOOK_URL` / `GOOGLE_SHEETS_WEBHOOK_SECRET` | Copies every lead into a Google Sheet as well as Turso. See `google-apps-script/README.md`. |
+| `BOOKING_URL` / `BOOKING_LABEL` | The "Book a Free Call" button in the PDF and email (Calendly by default). |
 | `PROSPECT_DB_PATH` / `MGA_LEAD_MAGNET_DIR` | Override where leads and PDFs are stored. |
 
 ### Emails
 
-- **Report to the visitor:** the personalized report inline, plus a button
-  linking to the PDF. With Gmail the PDF is also attached (MailerLite
+- **Report to the visitor:** a branded email (`backend/app/services/
+  email_templates.py`): a short note, a button to the PDF and a "Book a
+  Free Call" button to Calendly. With Gmail the PDF is also attached (MailerLite
   can't carry attachments).
 - **New-lead alert to the team:** name, email, phone, source, all their
   answers, whether their report was generated and emailed, and a link to
@@ -141,6 +144,7 @@ the error and a **Retry from failed stage** button. Retry asks for the
 | `GET /api/dashboard/mga-leads[/summary\|/{id}]` | `X-Dashboard-Key` | Lead list, status counts and detail. |
 | `GET /api/settings`, `GET /api/health/providers` | `X-Dashboard-Key` | Which providers are configured (never returns secrets). |
 | `POST /api/email/provider/test`, `/test-send` | `X-Dashboard-Key` | Check MailerLite and send one test email. |
+| `POST /api/dashboard/sheets/sync-all` | `X-Dashboard-Key` | Copy every lead into the Google Sheet (backfill). |
 
 ## 6. Reliability
 
@@ -186,9 +190,10 @@ The backend deploys as its own Vercel project from this same repo
    `backend`**. Framework: FastAPI (auto-detected).
 3. **Environment variables** (Project → Settings → Environment Variables):
    `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `DASHBOARD_API_KEY`,
-   `GOOGLE_FORM_WEBHOOK_SECRET`, the MailerLite ones, `OPENAI_API_KEY` (+
-   `OPENAI_BASE_URL`, `LLM_MODEL`), `LEAD_NOTIFY_EMAILS`, and
-   `PROSPECT_ALLOW_LIVE_SEND=true` once email is tested. See `.env.example`.
+   `GOOGLE_FORM_WEBHOOK_SECRET`, the MailerLite ones, `GEMINI_API_KEY`,
+   `GOOGLE_SHEETS_WEBHOOK_URL` + `GOOGLE_SHEETS_WEBHOOK_SECRET`,
+   `LEAD_NOTIFY_EMAILS`, and `PROSPECT_ALLOW_LIVE_SEND=true`. See
+   `.env.example` and `SETUP_GUIDE.md`.
 4. Deploy, then open `https://<backend>.vercel.app/api/health`. It must
    say `"status": "ok"` with a `turso:` database path. `"degraded"` means
    Turso isn't configured or reachable.

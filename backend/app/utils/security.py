@@ -17,10 +17,15 @@ def provider_status() -> dict[str, dict[str, str]]:
     def _status(*env_vars: str) -> str:
         return "configured" if all(os.environ.get(v) for v in env_vars) else "not_configured"
 
+    llm_configured = os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     return {
         "llm": {
-            "status": _status("OPENAI_API_KEY"),
-            "detail": "OpenAI-compatible endpoint used to personalize lead-magnet reports",
+            "status": "configured" if llm_configured else "not_configured",
+            "detail": "Google Gemini (GEMINI_API_KEY) used to personalize lead-magnet reports",
+        },
+        "google_sheets": {
+            "status": _status("GOOGLE_SHEETS_WEBHOOK_URL", "GOOGLE_SHEETS_WEBHOOK_SECRET"),
+            "detail": "Copies every lead into a Google Sheet (google-apps-script/LeadsSheet.gs)",
         },
         "mailerlite": {
             "status": _status(

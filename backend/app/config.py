@@ -52,10 +52,11 @@ CORS_ORIGINS = [
     if o.strip()
 ]
 
-# Global safety switch: no real email (lead-magnet delivery or team
-# notification) is ever sent unless this is explicitly enabled. This is
-# what keeps automated tests and local development from sending real email.
-ALLOW_LIVE_SEND = os.environ.get("PROSPECT_ALLOW_LIVE_SEND", "false").lower() in (
+# Master switch for real email (lead-magnet delivery + team notification).
+# ON by default: every lead gets their report emailed as soon as the email
+# provider's credentials are set. Set PROSPECT_ALLOW_LIVE_SEND=false to
+# pause all email (the automated tests always force it off).
+ALLOW_LIVE_SEND = os.environ.get("PROSPECT_ALLOW_LIVE_SEND", "true").lower() in (
     "1",
     "true",
     "yes",
@@ -127,6 +128,29 @@ PUBLIC_SITE_URL = os.environ.get(
 ).strip().rstrip("/")
 # The same address without "https://", for display text.
 PUBLIC_SITE_DISPLAY = PUBLIC_SITE_URL.split("://", 1)[-1]
+
+# Where the "Book a Free Call" buttons point (the PDF's call-to-action and
+# the delivery email). Kanth & Shaku's Calendly page by default. No
+# ?month=... on purpose: Calendly opens on the current month by itself, so
+# the link never goes stale.
+BOOKING_URL = (
+    os.environ.get("BOOKING_URL", "").strip()
+    or "https://calendly.com/shaku-c-miriyala/mygrowth-academy"
+)
+BOOKING_LABEL = os.environ.get("BOOKING_LABEL", "").strip() or "Book a Free Call"
+
+# The name the delivery email appears to come from in the visitor's inbox.
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "").strip() or "My Growth Academy"
+
+# --------------------------------------------------------------------------
+# Google Sheets mirror of the leads table (see app/services/sheets_sync.py
+# and google-apps-script/LeadsSheet.gs). Turso stays the source of truth;
+# every lead is also written to a Google Sheet, one row per lead, updated
+# in place as it moves through the pipeline. Leave the URL empty to turn
+# it off.
+# --------------------------------------------------------------------------
+GOOGLE_SHEETS_WEBHOOK_URL = os.environ.get("GOOGLE_SHEETS_WEBHOOK_URL", "").strip()
+GOOGLE_SHEETS_WEBHOOK_SECRET = os.environ.get("GOOGLE_SHEETS_WEBHOOK_SECRET", "").strip()
 
 # The website itself must always be able to call the API, even when
 # PROSPECT_CORS_ORIGINS is set to something that forgets it. Covers both

@@ -30,6 +30,12 @@ import { createPortal } from "react-dom";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "https://api.mygrowthacademy.coach";
 
+// Kanth & Shaku's Calendly page -- the "Book a Free Call" button on the
+// success screen (the PDF and the email use the same link).
+const BOOKING_URL =
+  process.env.NEXT_PUBLIC_BOOKING_URL ||
+  "https://calendly.com/shaku-c-miriyala/mygrowth-academy";
+
 type Field =
   | {
       type: "text";
@@ -496,6 +502,17 @@ export default function LeadMagnetModal({
                     Download My Future Snapshot
                   </a>
                 )}
+                <p className="mt-6 text-mga-grayDark">
+                  Want to talk it through with Kanth &amp; Shaku?
+                </p>
+                <a
+                  href={BOOKING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block w-full rounded border-2 border-mga-coral px-8 py-3 font-semibold text-mga-coral transition hover:bg-mga-coral hover:text-white"
+                >
+                  Book a Free Call
+                </a>
               </div>
             )}
 

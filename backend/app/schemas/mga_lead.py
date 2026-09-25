@@ -102,6 +102,8 @@ class MGALeadDetailOut(MGALeadOut):
     email_error: str = ""
     team_notified_at: str = ""
     team_notify_error: str = ""
+    sheet_synced_at: str = ""
+    sheet_sync_error: str = ""
     error_message: str = ""
     updated_at: str = ""
 

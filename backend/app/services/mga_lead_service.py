@@ -115,6 +115,8 @@ def to_detail_dict(row: dict[str, Any]) -> dict[str, Any]:
             "email_error": row.get("email_error") or "",
             "team_notified_at": row.get("team_notified_at") or "",
             "team_notify_error": row.get("team_notify_error") or "",
+            "sheet_synced_at": row.get("sheet_synced_at") or "",
+            "sheet_sync_error": row.get("sheet_sync_error") or "",
             "error_message": row.get("error_message") or "",
             "updated_at": row.get("updated_at") or "",
         }
@@ -235,7 +237,20 @@ def run_pipeline(lead_id: str) -> dict[str, Any]:
 
 
 def retry(lead_id: str) -> dict[str, Any]:
-    return run_pipeline(lead_id)
+    row = run_pipeline(lead_id)
+    _sync_sheet(row["id"])
+    return database.get_mga_lead(row["id"]) or row
+
+
+def _sync_sheet(lead_id: str) -> None:
+    """Best-effort copy of the lead's latest state into the Google Sheet
+    (a no-op unless GOOGLE_SHEETS_WEBHOOK_URL is set). Never raises."""
+    from app.services import sheets_sync
+
+    try:
+        sheets_sync.sync_lead(database.get_mga_lead(lead_id))
+    except Exception:  # noqa: BLE001 -- the sheet must never affect the lead
+        pass
 
 
 def _advance(row: dict[str, Any], stage: str) -> dict[str, Any]:
@@ -433,15 +448,22 @@ def _send_report_email(row: dict[str, Any]) -> dict[str, Any]:
         return {"email_sent": 0, "email_error": str(exc)}
 
     content = _load_json(row.get("lead_magnet_content_json", ""), {})
-    subject, body_html = _build_report_email(row, content)
+    # Gmail can carry the PDF as an attachment; MailerLite campaigns can't,
+    # so there the email's big button is the way to get it.
+    from app.senders.gmail_sender import GmailSender
+
+    pdf_path = _safe_pdf_path(row) if isinstance(sender, GmailSender) else None
+    subject, body_html = _build_report_email(row, content, pdf_attached=bool(pdf_path))
 
     try:
         result = sender.send(
             to_email,
             subject,
             body_html,
-            from_name="My Growth Academy",
-            attachments=[path] if (path := _safe_pdf_path(row)) else None,
+            from_name=_email_from_name(),
+            attachments=(
+                [(pdf_path, "My-Growth-Academy-Growth-Blueprint.pdf")] if pdf_path else None
+            ),
         )
     except Exception as exc:  # noqa: BLE001 -- an ESP/network error must never break delivery
         return {"email_sent": 0, "email_error": str(exc)[:2000]}
@@ -449,6 +471,12 @@ def _send_report_email(row: dict[str, Any]) -> dict[str, Any]:
     if result.success:
         return {"email_sent": 1, "email_sent_at": _utc_now_iso(), "email_error": ""}
     return {"email_sent": 0, "email_error": (result.error or "Send failed.")[:2000]}
+
+
+def _email_from_name() -> str:
+    import app.config as config
+
+    return config.EMAIL_FROM_NAME
 
 
 def _safe_pdf_path(row: dict[str, Any]) -> str | None:
@@ -460,77 +488,27 @@ def _safe_pdf_path(row: dict[str, Any]) -> str | None:
         return None
 
 
-def _build_report_email(row: dict[str, Any], content: dict[str, Any]) -> tuple[str, str]:
-    """Builds the delivery email's subject + HTML body: the personalized
-    report copy inline (so it's useful even if the visitor never clicks
-    through) plus a button to the same PDF download link the on-page
-    success screen shows."""
-    import html as _html
+def _build_report_email(
+    row: dict[str, Any], content: dict[str, Any], *, pdf_attached: bool = False
+) -> tuple[str, str]:
+    """Subject + HTML body of the delivery email: a short note, a button to
+    the PDF, and a "Book a Free Call" button to Kanth & Shaku's Calendly.
+    The design lives in app/services/email_templates.py."""
+    import app.config as config
+    from app.services.email_templates import build_report_email
 
-    name = (row.get("name") or "").strip()
-    greeting = f"Hi {_html.escape(name.split()[0])}," if name else "Hi there,"
-    title = content.get("title") or "Your Personalized Growth Blueprint"
     magnet_id = row.get("lead_magnet_id", "")
-    download_url = build_delivery_url(magnet_id) if magnet_id else ""
-
-    section_order = [
-        ("Where you're starting from", "starting_point"),
-        ("Where you're headed", "desired_future_state"),
-        ("What's in the way", "biggest_constraint"),
-        ("Your top three priorities", None),
-        ("Next 30 days", "next_30_days"),
-        ("Next 90 days", "next_90_days"),
-        ("One daily habit", "one_habit"),
-    ]
-
-    sections_html = ""
-    for heading, key in section_order:
-        if key is None:
-            priorities = [content.get(f"priority_{i}") for i in (1, 2, 3)]
-            priorities = [p for p in priorities if p]
-            if not priorities:
-                continue
-            items = "".join(f"<li>{_html.escape(str(p))}</li>" for p in priorities)
-            sections_html += (
-                f'<h3 style="color:#36488F;font-family:sans-serif;margin:24px 0 8px;">'
-                f"{heading}</h3><ul style=\"font-family:sans-serif;color:#424242;\">{items}</ul>"
-            )
-            continue
-        value = content.get(key)
-        if not value:
-            continue
-        sections_html += (
-            f'<h3 style="color:#36488F;font-family:sans-serif;margin:24px 0 8px;">'
-            f'{heading}</h3><p style="font-family:sans-serif;color:#424242;">'
-            f"{_html.escape(str(value))}</p>"
-        )
-
-    button_html = (
-        f'<p style="text-align:center;margin:32px 0;">'
-        f'<a href="{download_url}" style="background:#63D0A2;color:#ffffff;'
-        f'padding:14px 28px;border-radius:6px;text-decoration:none;'
-        f'font-family:sans-serif;font-weight:bold;">Download Your Full PDF Report</a></p>'
-        if download_url
-        else ""
+    return build_report_email(
+        name=(row.get("name") or "").strip(),
+        content=content,
+        download_url=build_delivery_url(magnet_id) if magnet_id else "",
+        booking_url=config.BOOKING_URL,
+        booking_label=config.BOOKING_LABEL,
+        site_url=PUBLIC_SITE_URL,
+        site_display=PUBLIC_SITE_DISPLAY,
+        logo_url=f"{PUBLIC_SITE_URL}/images/logo.png",
+        pdf_attached=pdf_attached,
     )
-
-    body_html = f"""
-    <div style="max-width:600px;margin:0 auto;font-family:sans-serif;">
-      <h1 style="color:#C84739;font-size:22px;">{_html.escape(title)}</h1>
-      <p style="color:#424242;">{greeting}</p>
-      <p style="color:#424242;">
-        Here's the personalized growth report you asked for, based on what
-        you told us.
-      </p>
-      {sections_html}
-      {button_html}
-      <p style="color:#8F8F8F;font-size:13px;margin-top:32px;">
-        My Growth Academy · <a href="{PUBLIC_SITE_URL}" style="color:#8F8F8F;">{PUBLIC_SITE_DISPLAY}</a>
-      </p>
-    </div>
-    """
-
-    return f"{title}: Your Personalized Growth Blueprint", body_html
 
 
 # --------------------------------------------------------------------------
@@ -546,6 +524,7 @@ def process_new_lead(lead_id: str) -> dict[str, Any]:
     you, and the email says so."""
     row = run_pipeline(lead_id)
     notify_team(row)
+    _sync_sheet(lead_id)
     return database.get_mga_lead(lead_id) or row
 
 

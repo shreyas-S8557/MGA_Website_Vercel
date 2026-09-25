@@ -77,6 +77,11 @@ class GmailSender:
         self.app_password = (
             app_password if app_password is not None else os.environ.get("GMAIL_APP_PASSWORD", "")
         )
+        # Optional different "From" address, e.g. a lead-magnet alias like
+        # blueprint@mygrowthacademy.coach. It must be added to the Gmail
+        # account under Settings -> Accounts -> "Send mail as", or Gmail
+        # rewrites it back to GMAIL_ADDRESS.
+        self.from_address = os.environ.get("GMAIL_FROM_ADDRESS", "").strip() or self.address
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
         self._smtp_client_factory = smtp_client_factory
@@ -152,10 +157,11 @@ class GmailSender:
         body_html: str,
         body_text: str | None,
         from_name: str,
-        attachments: list[str] | None,
+        attachments: list | None,
     ):
         msg = MIMEMultipart("mixed")
-        msg["From"] = f"{from_name} <{self.address}>" if from_name else self.address
+        from_addr = self.from_address or self.address
+        msg["From"] = email_utils.formataddr((from_name, from_addr)) if from_name else from_addr
         msg["To"] = to_address
         msg["Subject"] = subject
         message_id = email_utils.make_msgid(domain="gmail.com")
@@ -170,13 +176,16 @@ class GmailSender:
 
         # Optional attachments (MIMEBase + base64 encoding) -- used to
         # attach the lead-magnet PDF to the delivery email.
-        for path in attachments or []:
+        # Each item is a path, or (path, filename to show the recipient).
+        for item in attachments or []:
+            path, shown_name = item if isinstance(item, tuple) else (item, None)
             p = Path(path)
             with open(p, "rb") as fh:
-                part = MIMEBase("application", "octet-stream")
+                is_pdf = p.suffix.lower() == ".pdf"
+                part = MIMEBase("application", "pdf" if is_pdf else "octet-stream")
                 part.set_payload(fh.read())
             encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f"attachment; filename={p.name}")
+            part.add_header("Content-Disposition", "attachment", filename=shown_name or p.name)
             msg.attach(part)
 
         return msg, message_id
@@ -213,7 +222,7 @@ class GmailSender:
                 from_name=from_name,
                 attachments=attachments,
             )
-            self._conn.sendmail(self.address, [to_address], msg.as_string())
+            self._conn.sendmail(self.from_address or self.address, [to_address], msg.as_string())
             return SendResult(success=True, message_id=message_id)
         except GmailCredentialsError as exc:
             return SendResult(success=False, error=str(exc))

@@ -58,8 +58,8 @@ def get_sender(
         provider_name = (provider or EMAIL_PROVIDER).strip().lower()
         if not ALLOW_LIVE_SEND:
             raise SendModeNotAllowed(
-                "Live sending is disabled on this backend (PROSPECT_ALLOW_LIVE_SEND is not "
-                "set). This is a deliberate safety default -- see README.md."
+                "Live sending is turned off on this backend (PROSPECT_ALLOW_LIVE_SEND is "
+                "false). Set it to true to email leads -- see README.md."
             )
         provider_cls = _PROVIDERS.get(provider_name)
         if provider_cls is None:

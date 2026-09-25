@@ -1,8 +1,8 @@
 """
 Raw lead profile -> personalized lead-magnet content.
 
-Personalization uses the OpenAI-compatible client in app/llm.py (configured
-via OPENAI_API_KEY/OPENAI_BASE_URL/LLM_MODEL -- see the repo root
+Personalization uses Google Gemini through the client in app/llm.py
+(configured via GEMINI_API_KEY and optionally LLM_MODEL -- see the repo root
 .env.example). A failed/unparsable LLM call never raises -- it falls back
 to a fully deterministic, template-based generator, so lead-magnet
 generation (and therefore the whole pipeline) works with zero LLM
@@ -16,7 +16,7 @@ import secrets
 import sys
 from typing import Any
 
-from app.llm import extract_json_object, get_llm_client
+from app.llm import extract_json_object, get_llm_client, llm_settings
 
 LEAD_MAGNET_TYPES = [
     "budgeting",
@@ -147,17 +147,24 @@ def _no_dashes(text: str) -> str:
 
 
 def _generate_via_llm(profile: dict[str, Any]) -> dict[str, Any] | None:
-    if not os.environ.get("OPENAI_API_KEY"):
+    settings = llm_settings()
+    if settings is None:
         return None
     try:
-        client = get_llm_client()
-        model = os.environ.get("LLM_MODEL", "auto")
+        client = get_llm_client(settings)
         prompt = _PROMPT_TEMPLATE.format(profile_json=json.dumps(profile, indent=2))
+        kwargs: dict[str, Any] = {}
+        if settings.is_gemini:
+            # Gemini 3 models always "think" first, and those thinking tokens
+            # count against max_tokens. Keep the thinking short and leave
+            # plenty of room so the JSON answer is never cut off.
+            kwargs["extra_body"] = {"reasoning_effort": "low"}
         resp = client.chat.completions.create(
-            model=model,
+            model=settings.model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
+            max_tokens=4096 if settings.is_gemini else 800,
             temperature=0.5,
+            **kwargs,
         )
         return extract_json_object(resp.choices[0].message.content or "")
     except Exception as exc:  # noqa: BLE001 -- an LLM hiccup degrades personalization, it must never break delivery

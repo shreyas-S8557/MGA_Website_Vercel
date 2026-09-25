@@ -99,6 +99,9 @@ _MGA_LEADS_ADDED_COLUMNS = [
     # mga_lead_service.notify_team. Sent once per lead, never on retries.
     "team_notified_at TEXT NOT NULL DEFAULT ''",
     "team_notify_error TEXT NOT NULL DEFAULT ''",
+    # Google Sheets mirror -- see app/services/sheets_sync.py.
+    "sheet_synced_at TEXT NOT NULL DEFAULT ''",
+    "sheet_sync_error TEXT NOT NULL DEFAULT ''",
 ]
 
 
@@ -312,6 +315,7 @@ _MGA_LEAD_COLUMNS = [
     "lead_magnet_path", "lead_magnet_content_json", "delivered_at",
     "email_sent", "email_sent_at", "email_error",
     "team_notified_at", "team_notify_error",
+    "sheet_synced_at", "sheet_sync_error",
     "submitted_at", "created_at", "updated_at",
 ]
 

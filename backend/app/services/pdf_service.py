@@ -23,7 +23,7 @@ Layout (A4, two pages; long text flows onto extra pages safely):
     Your roadmap              [ 30 days ] [ 90 days ] [ start today ]
     Your 30-day habit tracker (printable tick boxes, weekly milestones)
     Three gratitudes a day    (from the site's gratitude section)
-    [ navy CTA band: "Want to talk it through?" / 10-Day Vetting Experience ]
+    [ navy CTA band: "Want to talk it through?" / Book a Free Call (Calendly) ]
 
   footer on every page: My Growth Academy · mygrowthacademy.coach   page n
 
@@ -40,7 +40,13 @@ from typing import Any
 
 from fpdf import FPDF
 
-from app.config import MGA_LEAD_MAGNET_DIR, PUBLIC_SITE_DISPLAY, PUBLIC_SITE_URL
+from app.config import (
+    BOOKING_LABEL,
+    BOOKING_URL,
+    MGA_LEAD_MAGNET_DIR,
+    PUBLIC_SITE_DISPLAY,
+    PUBLIC_SITE_URL,
+)
 
 _ASSETS = Path(__file__).resolve().parents[1] / "assets"
 _FONTS = _ASSETS / "fonts"
@@ -731,7 +737,8 @@ def render_lead_magnet(
     pdf.multi_cell(
         100, 4.8, align="L", text="Kanth & Shaku can walk you through it. Next step: the 10-Day Vetting Experience."
     )
-    btn_label = f"Visit {PUBLIC_SITE_DISPLAY}"
+    # The button opens Kanth & Shaku's Calendly page (config.BOOKING_URL).
+    btn_label = BOOKING_LABEL
     pdf.set_font("PoppinsSemi", "", 8.5)
     btn_w, btn_h = max(60, pdf.get_string_width(btn_label) + 10), 11
     bx = MARGIN + CONTENT_W - btn_w - 9
@@ -741,8 +748,8 @@ def render_lead_magnet(
     pdf.set_font("PoppinsSemi", "", 8.5)
     pdf.set_text_color(*WHITE)
     pdf.set_xy(bx, byy + 3.2)
-    pdf.cell(btn_w, 4.8, btn_label, align="C", link=SITE_URL)
-    pdf.link(bx, byy, btn_w, btn_h, SITE_URL)
+    pdf.cell(btn_w, 4.8, btn_label, align="C", link=BOOKING_URL)
+    pdf.link(bx, byy, btn_w, btn_h, BOOKING_URL)
     y += cta_h + 3
 
     # ---- Small print (one line; never forces a page on its own) ----------

@@ -158,3 +158,12 @@ def get_mga_lead(lead_id: str) -> MGALeadDetailOut:
     if detail is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     return MGALeadDetailOut(**detail)
+
+
+@router.post("/api/dashboard/sheets/sync-all")
+def sync_all_leads_to_sheet() -> dict:
+    """Re-send every lead to the Google Sheet (dashboard key required).
+    Run once after connecting the sheet to backfill existing leads."""
+    from app.services import sheets_sync
+
+    return sheets_sync.sync_all()
