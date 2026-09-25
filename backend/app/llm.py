@@ -71,7 +71,7 @@ def get_llm_client(settings: LLMSettings | None = None) -> OpenAI:
     settings = settings or llm_settings()
     if settings is None:
         raise RuntimeError("No LLM configured: set GEMINI_API_KEY.")
-    return OpenAI(api_key=settings.api_key, base_url=settings.base_url, timeout=30.0, max_retries=1)
+    return OpenAI(api_key=settings.api_key, base_url=settings.base_url, timeout=20.0, max_retries=0)
 
 
 def extract_json_object(text: str) -> dict[str, Any] | None:

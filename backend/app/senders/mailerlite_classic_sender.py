@@ -45,7 +45,11 @@ from app.senders.mailerlite_sender import (
 )
 
 BASE_URL = "https://api.mailerlite.com/api/v2"
-DEFAULT_TIMEOUT_SECONDS = 20.0
+DEFAULT_TIMEOUT_SECONDS = 12.0
+
+_CLEANUP_EVERY_SECONDS = 30 * 60
+_MAX_DELETES_PER_RUN = 10
+_LAST_CLEANUP = -1e12  # monotonic time of the last outbox cleanup
 
 
 def _env(name: str) -> str:
@@ -117,6 +121,7 @@ class MailerLiteClassicSender:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._http_client_factory = http_client_factory
+        self._client = None
 
     # -- config ------------------------------------------------------------------
 
@@ -143,10 +148,13 @@ class MailerLiteClassicSender:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        with self._http_client_factory(
-            base_url=self.base_url, headers=headers, timeout=self.timeout
-        ) as client:
-            resp = client.request(method, path, json=json)
+        # One pooled connection per sender: a send is 5-6 API calls, and a
+        # fresh TLS handshake for each one added seconds per lead.
+        if self._client is None:
+            self._client = self._http_client_factory(
+                base_url=self.base_url, headers=headers, timeout=self.timeout
+            )
+        resp = self._client.request(method, path, json=json)
         resp.raise_for_status()
         if resp.status_code == 204 or not resp.content:
             return None
@@ -188,6 +196,16 @@ class MailerLiteClassicSender:
         OUTBOX_MAX_AGE_HOURS. Only groups named OUTBOX_PREFIX...; never raises."""
         from datetime import datetime, timedelta, timezone
 
+        import time
+
+        global _LAST_CLEANUP
+        # At most once every 30 minutes per running instance, and at most
+        # _MAX_DELETES_PER_RUN deletions: housekeeping used to run on every
+        # single send and could eat most of a request's time limit.
+        if time.monotonic() - _LAST_CLEANUP < _CLEANUP_EVERY_SECONDS:
+            return 0
+        _LAST_CLEANUP = time.monotonic()
+
         deleted = 0
         try:
             groups = self._request("GET", "/groups?limit=1000") or []
@@ -200,6 +218,8 @@ class MailerLiteClassicSender:
                 created = _parse_time(group.get("date_created") or group.get("created_at"))
                 if created is None or created > cutoff:
                     continue
+                if deleted >= _MAX_DELETES_PER_RUN:
+                    break
                 try:
                     self._request("DELETE", f"/groups/{group['id']}")
                     deleted += 1
@@ -291,6 +311,62 @@ class MailerLiteClassicSender:
             if status == 429:
                 return SendResult(success=False, error="MailerLite rate limit exceeded (429).")
             return SendResult(success=False, error=f"MailerLite API error (HTTP {status}): {detail}")
+        except httpx.RequestError as exc:
+            return SendResult(success=False, error=f"Network error contacting MailerLite: {exc}")
+
+    def send_many(
+        self, to_addresses: list[str], subject: str, body_html: str, *, from_name: str = ""
+    ) -> SendResult:
+        """One campaign to several people (the team alert), instead of one
+        full group + campaign round per recipient. Never raises."""
+        recipients = [a.strip() for a in to_addresses if a and a.strip()]
+        if not recipients:
+            return SendResult(success=False, error="No recipients", retryable=False)
+        if len(recipients) == 1:
+            return self.send(recipients[0], subject, body_html, from_name=from_name)
+        try:
+            self.validate_credentials()
+        except MailerLiteCredentialsError as exc:
+            return SendResult(success=False, error=str(exc), retryable=False)
+        self._cleanup_old_outbox_groups()
+        try:
+            group = self._request("POST", "/groups", json={"name": f"{OUTBOX_PREFIX}{uuid.uuid4().hex}"})
+            group_id = (group or {}).get("id")
+            if not group_id:
+                return SendResult(success=False, error="MailerLite did not return a group id")
+            for r in recipients:
+                self._request(
+                    "POST",
+                    f"/groups/{group_id}/subscribers",
+                    json={"email": r, "resubscribe": False, "autoresponders": False},
+                )
+            campaign = self._request(
+                "POST",
+                "/campaigns",
+                json={
+                    "type": "regular",
+                    "name": f"mga-{uuid.uuid4().hex[:12]}",
+                    "subject": subject,
+                    "from": self.sender_email,
+                    "from_name": from_name or self.sender_name,
+                    "groups": [group_id],
+                },
+            )
+            campaign_id = (campaign or {}).get("id")
+            if not campaign_id:
+                return SendResult(success=False, error="MailerLite did not return a campaign id")
+            self._request(
+                "PUT",
+                f"/campaigns/{campaign_id}/content",
+                json={"html": _html_document(body_html), "plain": _plain_text(body_html), "auto_inline": True},
+            )
+            self._request("POST", f"/campaigns/{campaign_id}/actions/send")
+            return SendResult(success=True, message_id=str(campaign_id))
+        except httpx.HTTPStatusError as exc:
+            return SendResult(
+                success=False,
+                error=f"MailerLite API error (HTTP {exc.response.status_code}): {_error_detail(exc)}",
+            )
         except httpx.RequestError as exc:
             return SendResult(success=False, error=f"Network error contacting MailerLite: {exc}")
 

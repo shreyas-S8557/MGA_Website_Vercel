@@ -29,6 +29,8 @@ never re-marking an already-delivered lead.
 """
 from __future__ import annotations
 
+import sys as _sys
+import time as _time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -212,12 +214,16 @@ def run_pipeline(lead_id: str) -> dict[str, Any]:
 
         if start_index < _STAGE_ORDER.index("lead_magnet_ready"):
             database.update_mga_lead(row["id"], {"status": "lead_magnet_generating"})
+            _t = _time.monotonic()
             row = _generate_lead_magnet(row)
+            print(f"lead {lead_id} timing: report (AI + PDF)={_time.monotonic() - _t:.1f}s", file=_sys.stderr)
             row = _advance(row, "lead_magnet_ready")
 
         if start_index < _STAGE_ORDER.index("delivered"):
             database.update_mga_lead(row["id"], {"status": "delivery_queued"})
+            _t = _time.monotonic()
             row = _deliver(row)
+            print(f"lead {lead_id} timing: email to visitor={_time.monotonic() - _t:.1f}s", file=_sys.stderr)
             row = _advance(row, "delivered")
 
     except Exception as exc:  # noqa: BLE001 -- a failure must be recorded, never silently swallowed, and must never take the webhook request down with it
@@ -522,9 +528,22 @@ def process_new_lead(lead_id: str) -> dict[str, Any]:
     notification goes out whatever the pipeline outcome -- a lead whose
     PDF failed to generate is still a real person who asked to hear from
     you, and the email says so."""
+    import sys
+    import time
+
+    t0 = time.monotonic()
     row = run_pipeline(lead_id)
+    t1 = time.monotonic()
     notify_team(row)
+    t2 = time.monotonic()
     _sync_sheet(lead_id)
+    t3 = time.monotonic()
+    # Shows up in the Vercel logs: which step is slow, if any.
+    print(
+        f"lead {lead_id} timing: pipeline={t1 - t0:.1f}s team_alert={t2 - t1:.1f}s "
+        f"sheet={t3 - t2:.1f}s total={t3 - t0:.1f}s",
+        file=sys.stderr,
+    )
     return database.get_mga_lead(lead_id) or row
 
 
@@ -553,6 +572,18 @@ def notify_team(row: dict[str, Any]) -> dict[str, Any]:
     subject, body_html = _build_team_notification(row)
     errors: list[str] = []
     sent_any = False
+    if hasattr(sender, "send_many") and len(recipients) > 1:
+        # One campaign for the whole team (MailerLite Classic) -- far fewer
+        # API calls than one full send per person.
+        try:
+            result = sender.send_many(recipients, subject, body_html, from_name="MGA Website Leads")
+            if result.success:
+                sent_any = True
+            else:
+                errors.append(result.error or "Send failed.")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(str(exc))
+        recipients = []
     for to_email in recipients:
         try:
             result = sender.send(to_email, subject, body_html, from_name="MGA Website Leads")

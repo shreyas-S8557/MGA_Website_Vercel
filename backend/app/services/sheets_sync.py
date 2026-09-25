@@ -28,7 +28,7 @@ from typing import Any
 
 import httpx
 
-_TIMEOUT_SECONDS = 15.0
+_TIMEOUT_SECONDS = 10.0
 _BATCH_SIZE = 50
 
 _SOURCE_LABELS = {

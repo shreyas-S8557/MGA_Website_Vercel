@@ -181,3 +181,50 @@ def test_pipeline_adds_lead_to_group_only_when_configured(monkeypatch):
     monkeypatch.setattr(config, "ALLOW_LIVE_SEND", True)
     assert mga_lead_service._add_to_mailerlite_list(row) == ""
     assert added == [("priya@example.com", "Priya Shah", "123", "112974522", False)]
+
+
+import pytest as _pytest
+
+import app.senders.mailerlite_classic_sender as _classic_mod
+
+
+@_pytest.fixture(autouse=True)
+def _reset_cleanup_throttle():
+    # Outbox cleanup runs at most every 30 min per instance; each test here
+    # starts as if it hasn't run yet.
+    _classic_mod._LAST_CLEANUP = -1e12
+    yield
+
+
+def test_cleanup_runs_at_most_once_per_half_hour():
+    calls: list = []
+    sender = _sender(_routes(), calls)
+    assert sender.send("a@example.com", "S", "Body").success
+    assert sender.send("b@example.com", "S", "Body").success
+    assert [p.split("?")[0] for m, p, _, _ in calls if m == "GET"] == ["/groups"]
+
+
+def test_send_reuses_one_http_client():
+    made = []
+    routes, calls = _routes(), []
+
+    def factory(**kw):
+        made.append(1)
+        return _Client(routes, calls, **kw)
+
+    sender = MailerLiteClassicSender(
+        api_key="k", sender_email="hello@example.com", sender_name="MGA", http_client_factory=factory
+    )
+    assert sender.send("lead@example.com", "S", "Body").success
+    assert len(made) == 1
+
+
+def test_send_many_is_one_campaign():
+    calls: list = []
+    r = _sender(_routes({("POST", "/groups/11/subscribers"): _Resp(200, {"id": 1})}), calls).send_many(
+        ["kanth@example.com", "shaku@example.com"], "New lead", "<p>hi</p>"
+    )
+    assert r.success
+    assert sum(1 for m, p, _, _ in calls if m == "POST" and p == "/campaigns") == 1
+    subs = [j["email"] for m, p, j, _ in calls if p == "/groups/11/subscribers"]
+    assert subs == ["kanth@example.com", "shaku@example.com"]
